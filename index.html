@@ -1,0 +1,5379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>直插式土壤重金属电化学检测系统</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+/* =====================================================================
+ * 直插式土壤重金属电化学检测系统 —— 云平台控制台风格
+ * ---------------------------------------------------------------------
+ * 设计基调：中性灰蓝底 + 纯白卡片 + 1px 细边框 + 8px 圆角
+ * 功能契约（务必保留，JS 依赖）：
+ *   1. 元素 id 必须存在（chart / historyChart / connStatus / btnConnect /
+ *      pageTitle / paramPage / tipModal / waitingModal /
+ *      confirmModal / rawWarn / homeError 等）
+ *   2. 显隐依赖 .hidden（display:none !important）
+ *   3. .conn-status、.btn-connect 的激活态用 .on 类
+ *   4. .nav-btn 的选中态用 .active 类；.hist-item 同理
+ * ===================================================================*/
+:root {
+  /* 背景与描边 */
+  --bg:        #f5f7fb;
+  --bg-2:      #eef2f8;
+  --panel:     #ffffff;
+  --line:      #e5eaf2;
+  --line-soft: #eef2f8;
+
+  /* 文字：加深主色、拉开通透层次 */
+  --ink:       #0f172a;
+  --ink-2:     #3b4757;
+  --ink-3:     #64748b;
+  --ink-4:     #94a3b8;
+  --ink-5:     #b6c0cd;
+
+  /* 主色 */
+  --brand:      #1677ff;
+  --brand-2:    #0958d9;
+  --brand-soft: #e8f1ff;
+  --brand-line: #cfe0ff;
+
+  /* 语义色 */
+  --green:      #18a058;
+  --green-soft: #e9f8ef;
+  --green-line: #c6ecd7;
+  --orange:     #d9820a;
+  /* 模块强调色（与主色同明度、同饱和度区间，保证和谐） */
+  --accent-blue:   #1677ff;
+  --accent-blue-2: #4f9dff;
+  --accent-blue-soft: #eaf2ff;
+  --accent-teal:   #0d9488;
+  --accent-teal-2: #2bb3a3;
+  --accent-teal-soft: #e6f7f4;
+  --accent-amber:  #d9820a;
+  --accent-amber-2:#f5a524;
+  --accent-amber-soft: #fff4e2;
+  --accent-violet: #7a5af8;
+  --accent-violet-2:#a78bfa;
+  --accent-violet-soft: #f1edff;
+  --orange-soft:#fff6e8;
+  --orange-line:#f7e2c0;
+  --purple:     #7a5af8;
+  --red:        #e5484d;
+  --red-soft:   #fdecec;
+  --red-line:   #f8d3d3;
+
+  --r-sm: 5px;
+  --r:    8px;
+  --r-lg: 12px;
+  --r-xl: 14px;
+
+  /* 统一焦点环 */
+  --ring: 0 0 0 3px rgba(22, 119, 255, .16);
+
+  --sh-1: 0 1px 2px rgba(15, 23, 42, .04);
+  --sh-2: 0 1px 3px rgba(15, 23, 42, .05), 0 1px 2px rgba(15, 23, 42, .03);
+  --sh-3: 0 4px 14px rgba(15, 23, 42, .07);
+  --sh-4: 0 16px 44px rgba(15, 23, 42, .16);
+
+  --sidebar-w: 210px;
+  --header-h:  56px;
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+          "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  /* 淡淡的蓝紫光晕，避免大片纯灰 */
+  background:
+    radial-gradient(1200px 640px at 4% -14%, rgba(22, 119, 255, .16), transparent 60%),
+    radial-gradient(1000px 560px at 104% -8%, rgba(122, 90, 248, .15), transparent 58%),
+    radial-gradient(900px 620px at 88% 108%, rgba(13, 148, 136, .12), transparent 60%),
+    radial-gradient(760px 520px at 12% 104%, rgba(217, 130, 10, .10), transparent 62%),
+    var(--bg);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.hidden { display: none !important; }
+
+/* ===================== 顶部标题栏 ===================== */
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+
+.app-header {
+  height: var(--header-h);
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+.app-header h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .2px;
+  color: var(--ink);
+}
+
+/* ===================== 主体：左导航 + 内容 ===================== */
+.app-body { flex: 1; display: flex; min-height: 0; }
+
+/* ---------- 侧边导航 ---------- */
+.side {
+  width: var(--sidebar-w);
+  flex: none;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 60%, #f7f9ff 100%);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: var(--header-h);
+  height: calc(100vh - var(--header-h));
+  overflow-y: auto;
+}
+.side-nav { padding: 10px 8px; flex: 1; }
+.side-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  color: var(--ink-4);
+  padding: 10px 10px 6px;
+}
+.side-label:first-child { padding-top: 2px; }
+
+.nav-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  margin-bottom: 2px;
+  border: none;
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--ink-3);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.nav-btn .ico {
+  width: 16px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  opacity: .85;
+  transition: color .16s, opacity .16s;
+}
+/* 每个入口一个颜色，侧栏不再是一片灰 */
+.nav-btn#navHome .ico    { color: var(--accent-blue); }
+.nav-btn#navDetect .ico  { color: var(--accent-blue); }
+.nav-btn#navClean .ico   { color: var(--accent-teal); }
+/* 选中项各自用模块色 */
+#navClean.active { background: var(--accent-teal-soft); color: #0b7c72; box-shadow: inset 2.5px 0 0 var(--accent-teal); }
+#navHistory.active { background: var(--accent-amber-soft); color: #a8620a; box-shadow: inset 2.5px 0 0 var(--accent-amber); }
+#navDevice.active { background: var(--accent-violet-soft); color: #5b3fd6; box-shadow: inset 2.5px 0 0 var(--accent-violet); }
+.nav-btn#navHistory .ico { color: var(--accent-amber); }
+.nav-btn#navDevice .ico  { color: var(--accent-violet); }
+.nav-btn:hover { background: #f4f7fb; color: var(--ink); }
+.nav-btn.active {
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 600;
+}
+.nav-btn.active .ico { opacity: 1; }
+
+/* ---------- 主区域 ---------- */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* 内容顶栏：页面标题 + 状态 + 连接按钮 */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 0 20px;
+  min-height: 52px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.topbar .where { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.topbar .where h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.topbar .tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* 连接状态（激活态 .on 由 JS 切换） */
+.conn-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  background: #f4f6fa;
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.conn-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .9;
+}
+.conn-status.on {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: var(--green-line);
+}
+
+.btn-connect {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--r);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--brand);
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.btn-connect:hover { background: var(--brand-2); border-color: var(--brand-2); }
+.btn-connect.on {
+  background: #fff;
+  border-color: #f0c4c4;
+  color: var(--red);
+}
+.btn-connect.on:hover { background: var(--red-soft); border-color: #e8a9a9; }
+
+.content { padding: 18px 20px 32px; flex: 1; }
+
+/* ===================== 卡片 ===================== */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  flex-wrap: wrap;
+  row-gap: 8px;
+  background: linear-gradient(180deg, #fbfcff 0%, #ffffff 100%);
+}
+.card-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  flex: none;
+}
+.card-head .sub { font-size: 12.5px; color: var(--ink-4); }
+.card-body { padding: 16px 18px; }
+
+/* ===================== 按钮 ===================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 13px;
+  border-radius: var(--r);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid #d9e0ea;
+  background: #fff;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.btn:hover { background: #fafcff; border-color: var(--brand-line); color: var(--brand); }
+.btn-primary {
+  background: linear-gradient(180deg, #3d92ff, var(--brand));
+  border-color: var(--brand);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(22, 119, 255, .22);
+}
+.btn-primary:hover { background: linear-gradient(180deg, #2f8bff, var(--brand-2)); }
+.btn-primary:hover { background: var(--brand-2); border-color: var(--brand-2); color: #fff; }
+.btn-danger { color: var(--red); border-color: var(--red-line); }
+.btn-danger:hover { background: var(--red-soft); border-color: #eeb8b6; color: var(--red); }
+.btn-sm { height: 26px; padding: 0 10px; font-size: 12.5px; }
+
+/* ===================== 首页 ===================== */
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+.hero-ico {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.hero h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: .2px;
+  color: var(--ink);
+}
+
+/* 模式卡片：纯白 + 细边框，悬浮时描边变蓝 */
+.mode-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.mode-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  padding: 20px;
+  min-height: 150px;
+  border-radius: var(--r-lg);
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .15s, box-shadow .15s;
+}
+.mode-card:hover {
+  border-color: var(--brand);
+  box-shadow: 0 3px 12px rgba(22, 119, 255, .10);
+}
+.mode-card .ico {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-lg);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f8fd;
+  line-height: 0;
+  margin-bottom: 14px;
+  transition: transform .18s, background .18s;
+}
+/* 每张卡一套强调色：图标底色 / 悬停边框 / 装饰图标 */
+.mode-card.mc-blue {
+  background: linear-gradient(160deg, rgba(22, 119, 255, .14) 0%, rgba(22, 119, 255, .03) 62%, #fff 100%);
+  border-color: rgba(22, 119, 255, .22);
+}
+.mode-card.mc-teal {
+  background: linear-gradient(160deg, rgba(13, 148, 136, .14) 0%, rgba(13, 148, 136, .03) 62%, #fff 100%);
+  border-color: rgba(13, 148, 136, .22);
+}
+.mode-card.mc-amber {
+  background: linear-gradient(160deg, rgba(217, 130, 10, .15) 0%, rgba(217, 130, 10, .03) 62%, #fff 100%);
+  border-color: rgba(217, 130, 10, .22);
+}
+/* 图标改为实色渐变底 + 白色线条 */
+.mode-card .ico svg { color: #fff; }
+.mode-card.mc-blue .ico {
+  background: linear-gradient(140deg, #1677ff, #4f9dff);
+  box-shadow: 0 6px 16px rgba(22, 119, 255, .32);
+}
+.mode-card.mc-teal .ico {
+  background: linear-gradient(140deg, #0d9488, #2bb3a3);
+  box-shadow: 0 6px 16px rgba(13, 148, 136, .30);
+}
+.mode-card.mc-amber .ico {
+  background: linear-gradient(140deg, #d9820a, #f5a524);
+  box-shadow: 0 6px 16px rgba(217, 130, 10, .30);
+}
+.mode-card.mc-blue:hover { border-color: var(--accent-blue-2); box-shadow: 0 8px 22px rgba(22, 119, 255, .14); }
+.mode-card.mc-teal:hover { border-color: var(--accent-teal-2); box-shadow: 0 8px 22px rgba(13, 148, 136, .14); }
+.mode-card.mc-amber:hover { border-color: var(--accent-amber-2); box-shadow: 0 8px 22px rgba(217, 130, 10, .14); }
+.mode-card:hover .ico { transform: translateY(-2px) scale(1.04); }
+.mode-card.mc-blue .ghost { color: var(--accent-blue); }
+.mode-card.mc-teal .ghost { color: var(--accent-teal); }
+.mode-card.mc-amber .ghost { color: var(--accent-amber); }
+.mode-card b {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.mode-card .go {
+  margin-top: auto;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--brand);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* ===================== 检测页 ===================== */
+.focus-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 14px;
+  align-items: start;
+}
+.focus-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.chart-wrap { padding: 6px 8px 10px; }
+#chart { width: 100%; height: 520px; }
+
+.readout { text-align: right; line-height: 1.3; }
+.readout .k { font-size: 10.5px; color: var(--ink-4); letter-spacing: .3px; }
+.readout .v {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 重金属结果卡：数值放大，浓度/峰电流上色 */
+.hm-card .tbl thead th { padding: 10px 12px; }
+.hm-card .tbl tbody td { padding: 12px; font-size: 13px; }
+.hm-card .tbl .metal { font-size: 14px; font-weight: 600; letter-spacing: .5px; }
+.hm-card .tbl tbody td.num:not(.empty):not(.muted) {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.hm-card .tbl tbody td:nth-child(3):not(.empty):not(.muted) { color: var(--brand); }
+/* 峰电流是"支撑数据"，不属于异常，改用中性色；
+ * 红色保留给真正需要警觉的状态（参见 ISA-101 高性能 HMI 的配色原则）。 */
+.hm-card .tbl tbody td:nth-child(4):not(.empty):not(.muted) { color: var(--ink-3); }
+
+/* 数据统计：次要信息带 */
+.stats-strip .card-head h3 { font-size: 13.5px; }
+
+/* ===================== 指标块 ===================== */
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  background: var(--panel);
+}
+.metric {
+  background: #fafbfd;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  padding: 9px 11px;
+}
+.metric .k {
+  font-size: 11.5px;
+  color: var(--ink-4);
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+.metric .v {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+.metric .v.accent { color: var(--brand); }
+.metric .v.brand  { color: var(--green); }
+.metric .v.danger { color: var(--red); }
+.metric .v.warn   { color: var(--orange); }
+
+/* ===================== 说明行 ===================== */
+.note {
+  margin: 0;
+  padding: 10px 18px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  line-height: 1.6;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.note::before { content: "›"; color: var(--brand); font-weight: 600; flex: none; }
+.note.plain::before { content: none; }
+.card > .note:last-child { border-bottom: none; }
+
+/* ===================== 数据表 ===================== */
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl thead th {
+  text-align: left;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .2px;
+  color: var(--ink-4);
+  background: #fafbfc;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.tbl thead th:first-child { padding-left: 18px; }
+.tbl thead th:last-child { text-align: right; padding-right: 18px; }
+.tbl tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-2);
+}
+.tbl tbody td:first-child { padding-left: 18px; }
+.tbl tbody td:last-child { text-align: right; padding-right: 18px; }
+.tbl tbody tr:last-child td { border-bottom: none; }
+.tbl tbody tr:hover td { background: #fafcff; }
+.tbl .metal { font-weight: 600; color: var(--ink); }
+.tbl .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tbl .empty { color: #c2cbd8; }
+.tbl .num.muted { color: var(--ink-4); font-weight: 500; font-size: 12.5px; }
+
+/* ===================== 历史页 ===================== */
+.hist-grid {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;   /* 左列卡片与右列等高，底部不再留白 */
+}
+/* 左列：头部固定，列表占满剩余高度并在内部滚动 */
+.hist-grid > .card:first-child {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.hist-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px 0;
+}
+.hist-filter-hint { font-size: 12px; color: var(--ink-4); }
+.hist-filter-select {
+  height: 26px;
+  max-width: 150px;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: #fff;
+  border: 1px solid #d9e0ea;
+  border-radius: var(--r);
+  cursor: pointer;
+}
+.hist-filter-select:focus { outline: none; border-color: var(--brand); }
+.hist-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* 上限跟着视口走：记录再多也不会把左列拉得比右列还长 */
+  max-height: calc(100vh - 320px);
+  overflow-y: auto;
+  padding: 8px;
+  /* 极淡的点阵纹理，记录少时下方不至于是一片死白 */
+  background:
+    radial-gradient(circle at 1px 1px, rgba(150, 175, 210, .13) 1px, transparent 0) 0 0 / 16px 16px,
+    linear-gradient(180deg, #fdfefe 0%, #f8fafe 100%);
+}
+.hist-item {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 11px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  background: var(--panel);
+  transition: border-color .15s, background .15s;
+}
+.hist-item:last-child { margin-bottom: 0; }
+.hist-item:hover { border-color: var(--brand-line); background: #fafcff; }
+.hist-item.active {
+  border-color: var(--brand);
+  background: #f7faff;
+}
+.hist-item .row1 { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.hist-item .cmp {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  min-width: 0;
+}
+.hist-item .cmp input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  accent-color: var(--brand);
+  cursor: pointer;
+  margin: 0;
+}
+.hist-item .type { font-size: 13px; font-weight: 600; color: var(--ink); }
+.hist-item .when { font-size: 11.5px; color: var(--ink-4); margin-top: 2px; }
+.hist-item .nums {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-top: 7px;
+  line-height: 1.6;
+}
+.hist-item .acts { display: flex; gap: 8px; margin-top: 9px; }
+#historyChart { width: 100%; height: 352px; }
+
+/* 历史曲线左上角：沉积时间（多条对比时隐藏） */
+.his-readout { display: inline-flex; align-items: baseline; gap: 6px; }
+.his-readout .k { font-size: 10.5px; color: var(--ink-4); letter-spacing: .3px; }
+.his-readout .v {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 采集信息（点数 · 更新时间）：等宽小字，不抢读数 */
+.acq-info {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--ink-4);
+  white-space: nowrap;
+}
+
+/* 连接控件（原顶栏，现位于设备管理页） */
+.conn-tools { display: flex; align-items: center; gap: 8px; }
+
+/* ===================== 设备管理页 ===================== */
+.device-grid {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+/* 设备列表 */
+.dev-list { padding: 8px; max-height: 560px; overflow-y: auto; }
+.dev-item {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.dev-item:last-child { margin-bottom: 0; }
+.dev-item:hover { border-color: var(--brand-line); background: #fafcff; }
+.dev-item.editing { border-color: var(--brand); background: #f7faff; }
+.dev-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dev-name {
+  font-size: 13px; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dev-badge {
+  flex: none; font-size: 11px; font-weight: 500;
+  color: var(--green); background: var(--green-soft);
+  border: 1px solid var(--green-line);
+  border-radius: 999px; padding: 1px 7px;
+}
+.dev-host {
+  font-family: var(--mono); font-size: 11.5px;
+  color: var(--ink-3); margin-top: 3px;
+}
+.dev-topics {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--ink-4); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dev-empty { text-align: center; color: var(--ink-4); font-size: 12.5px; padding: 24px 0; }
+
+/* 历史条目右上角：来源设备 */
+.hist-item .dev-chip {
+  flex: none;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--ink-3);
+  background: #f4f7fb;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.device-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.switch-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--brand);
+  cursor: pointer;
+  margin: 0;
+}
+#devicePage .field input { font-family: var(--mono); }
+
+/* ===================== 弹窗 ===================== */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(15, 23, 38, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal {
+  width: 100%;
+  background: #fff;
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-4);
+  animation: pop .16s ease;
+  overflow: hidden;
+}
+.modal::before {
+  content: "";
+  display: block;
+  height: 4px;
+  background: linear-gradient(90deg, #1677ff 0%, #4f6dff 48%, #7a5af8 100%);
+}
+@keyframes pop {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.modal-sm { max-width: 380px; }
+.modal-md { max-width: 500px; }
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.modal-head h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink); }
+.modal-head .x {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--ink-4);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  transition: background .15s, color .15s;
+}
+.modal-head .x:hover { background: var(--line-soft); color: var(--ink-2); }
+.modal-body { padding: 18px 20px; }
+.modal-foot { display: flex; gap: 10px; padding: 0 20px 18px; }
+.modal-foot .btn { flex: 1; height: 34px; }
+
+/* 参数表单 */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 16px; }
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+  margin-bottom: 5px;
+}
+.field input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid #d9e0ea;
+  border-radius: var(--r);
+  transition: border-color .15s, box-shadow .15s;
+}
+.field input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, .12);
+}
+
+/* 等待 / 提示弹窗 */
+.centered { text-align: center; padding: 30px 22px; }
+.spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 16px;
+  border: 3px solid var(--brand-soft);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin .9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.centered h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; color: var(--ink); }
+.centered p { margin: 0 0 20px; font-size: 13px; color: var(--ink-3); line-height: 1.65; }
+.big-icon { font-size: 34px; line-height: 1; margin-bottom: 12px; }
+
+/* ===================== 底部警示条 ===================== */
+#rawWarn {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  background: #fffbf3;
+  border-top: 1px solid var(--orange-line);
+  box-shadow: 0 -4px 16px rgba(16, 24, 40, .06);
+  padding: 12px 20px;
+}
+#rawWarn .inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+#rawWarn .ttl { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: #8a4b00; }
+#rawWarnText {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--orange);
+  word-break: break-all;
+  line-height: 1.6;
+}
+
+/* ===================== 滚动条 ===================== */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #cfd8e6;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: #b4c0d2; background-clip: content-box; }
+
+/* ===================== 页面切换过渡 ===================== */
+/* 三个页面从 display:none 变为可见时，动画会自动重放一次，
+ * 形成"淡入 + 轻微上移"的入场效果，接近平台页签切换的观感。 */
+#homePage,
+#detectPage,
+#historyPage,
+#devicePage,
+#paramPage {
+  animation: pageEnter .18s cubic-bezier(.2, .8, .3, 1);
+}
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 弹窗：遮罩淡入 + 面板轻微缩放 */
+.overlay { animation: fadeIn .15s ease; }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* 尊重系统的"减少动态效果"偏好 */
+@media (prefers-reduced-motion: reduce) {
+  #homePage,
+  #detectPage,
+  #historyPage,
+  #devicePage,
+  #paramPage,
+  .overlay { animation: none; }
+}
+
+/* ===================== 首页仪表盘 ===================== */
+#homePage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+#homePage > .home-hero { margin-bottom: 0; }
+#homePage > .home-grid { align-items: stretch; }
+#homePage > .home-grid > .card { display: flex; flex-direction: column; min-height: 320px; }
+
+/* 参数条：横向排布，随宽度自动换行 */
+.home-params { flex: none; }
+.param-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 30px;
+  padding: 16px 20px;
+}
+.pc { display: flex; align-items: baseline; gap: 8px; }
+.pc .k { font-size: 11.5px; color: var(--ink-4); letter-spacing: .2px; white-space: nowrap; }
+.pc .v {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.pc .u { font-size: 11px; color: var(--ink-4); }
+
+/* 最近一次结果：金属浓度条 */
+.home-result { padding: 14px 18px 16px; display: flex; flex-direction: column; justify-content: center; flex: 1; }
+.hs-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+}
+.hs-name {
+  width: 22px;
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.hs-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 99px;
+  background: #eef2f8;
+  overflow: hidden;
+}
+.hs-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #4f9dff, #1677ff);
+}
+.hs-val {
+  width: 58px;
+  flex: none;
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.hs-none {
+  font-size: 12px;
+  color: var(--ink-4);
+  padding: 4px 0 8px;
+}
+
+.home-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 190% at 92% 0%, rgba(255, 255, 255, .28) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(115deg, #1677ff 0%, #3f6bff 42%, #7a5af8 100%);
+  box-shadow: 0 10px 26px rgba(48, 92, 220, .28);
+}
+.hh-text h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: .2px;
+  color: #fff;
+}
+
+.hh-stats {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-wrap: wrap;
+}
+.hh-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 20px;
+  border-left: 1px solid rgba(255, 255, 255, .24);
+}
+.hh-stat:first-child { border-left: none; }
+.hh-stat .k {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, .74);
+  letter-spacing: .3px;
+  white-space: nowrap;
+}
+.hh-stat .v {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 20px;
+  font-weight: 650;
+  color: #fff;
+  letter-spacing: -.4px;
+  line-height: 1.1;
+}
+.hh-stat .v.txt {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hh-stat .u { font-size: 11.5px; color: rgba(255, 255, 255, .66); }
+
+/* 首页概览条右侧的连接控件 */
+.hh-conn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 22px;
+  border-left: 1px solid rgba(255, 255, 255, .24);
+}
+/* 渐变底上的连接控件：反白处理 */
+.hh-conn .conn-status {
+  background: rgba(255, 255, 255, .18);
+  color: #fff;
+  border-color: rgba(255, 255, 255, .34);
+  backdrop-filter: blur(4px);
+}
+.hh-conn .conn-status.on {
+  background: #fff;
+  color: var(--green);
+  border-color: #fff;
+}
+.hh-conn .btn-connect {
+  background: #fff;
+  border-color: #fff;
+  color: var(--brand);
+  box-shadow: 0 4px 14px rgba(10, 30, 80, .22);
+}
+.hh-conn .btn-connect:hover {
+  background: #f2f7ff;
+  border-color: #f2f7ff;
+  color: var(--brand-2);
+}
+.hh-conn .btn-connect.on {
+  background: rgba(255, 255, 255, .16);
+  border-color: rgba(255, 255, 255, .55);
+  color: #fff;
+  box-shadow: none;
+}
+.hh-conn .btn-connect.on:hover {
+  background: rgba(255, 255, 255, .26);
+  border-color: #fff;
+  color: #fff;
+}
+
+.mode-card .ghost {
+  position: absolute;
+  right: -10px;
+  bottom: -14px;
+  width: 108px;
+  height: 108px;
+  color: currentColor;
+  opacity: .07;
+  pointer-events: none;
+  line-height: 0;
+}
+.mode-card .ghost svg { width: 100%; height: 100%; }
+.mode-card .meta {
+  font-size: 12px;
+  color: var(--ink-4);
+  margin-top: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 0.95fr);
+  gap: 16px;
+}
+
+/* 最近检测列表 */
+.home-recent { padding: 8px; display: flex; flex-direction: column; flex: 1; }
+.hr-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: background .16s;
+}
+.hr-item:hover { background: #f7faff; }
+.hr-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--brand);
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, .12);
+}
+.hr-dot.clean { background: var(--green); box-shadow: 0 0 0 3px rgba(24, 160, 88, .12); }
+.hr-main { flex: 1; min-width: 0; }
+.hr-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hr-title em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-3);
+  background: #f4f7fb;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 1px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+.hr-sub {
+  font-size: 11.5px;
+  color: var(--ink-4);
+  font-family: var(--mono);
+  margin-top: 3px;
+}
+.hr-val {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.hr-val span { font-size: 11px; color: var(--ink-4); font-weight: 500; margin-left: 2px; }
+.home-empty {
+  text-align: center;
+  color: var(--ink-4);
+  font-size: 12.5px;
+  padding: 34px 0;
+}
+
+/* 峰值趋势迷你图 */
+.home-spark { padding: 16px 18px 12px; display: flex; flex-direction: column; justify-content: center; flex: 1; }
+.home-spark svg { display: block; width: 100%; height: 180px; flex: none; overflow: visible; }
+.hs-axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-4);
+  margin-top: 6px;
+}
+
+@media (max-width: 1500px) {
+  .home-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+@media (max-width: 1180px) {
+  .home-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ===================== 检测页 ===================== */
+#detectPage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: calc(100vh - var(--header-h) - 56px - 60px);
+}
+#detectPage > .focus-grid { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+#detectPage .chart-card { display: flex; flex-direction: column; min-height: 0; }
+/* 右列两卡跟随曲线高度：统计卡吸收多余空间，两列底边齐平 */
+#detectPage .focus-side { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+#detectPage .focus-side > .hm-card { flex: 0 0 auto; }
+#detectPage .focus-side > .stats-strip { flex: 1 1 auto; display: flex; flex-direction: column; }
+#detectPage .focus-side > .stats-strip .metrics { flex: 1 1 auto; align-content: space-between; }
+#detectPage .chart-wrap { flex: 1 1 auto; min-height: 320px; position: relative; }
+#detectPage #chart { height: 100%; min-height: 320px; }
+
+/* 结果摘要条 */
+.run-strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 14px 22px;
+  border: 1px solid #dbe7ff;
+  border-left: 3px solid var(--brand);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 180% at 100% 0%, rgba(122, 90, 248, .10) 0%, rgba(122, 90, 248, 0) 55%),
+    linear-gradient(120deg, #f8fbff 0%, #ffffff 52%, #faf9ff 100%);
+  box-shadow: 0 2px 10px rgba(22, 119, 255, .06);
+}
+.rs-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 22px;
+  border-left: 1px solid var(--line-soft);
+}
+.rs-item:first-child { border-left: none; padding-left: 0; }
+.rs-item .k { font-size: 11.5px; color: var(--ink-4); letter-spacing: .3px; white-space: nowrap; }
+.rs-item .v {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.rs-item .v.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.2px; }
+/* 摘要条数值按含义着色 */
+.rs-item:nth-child(2) .v { color: #5b3fd6; }
+.rs-item:nth-child(3) .v { color: #1060d8; }
+.rs-item:nth-child(4) .v { color: #0b7c72; }
+.rs-item:nth-child(5) .v { color: #a8620a; }
+
+/* 检出徽标 */
+.hit-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .2px;
+  color: var(--ink-4);
+  background: #f4f7fb;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+.hit-badge.on {
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-color: var(--brand-line);
+}
+
+/* 检出行的强化：左侧竖条 + 名称加深 */
+.tbl tbody tr.hit td:first-child {
+  box-shadow: inset 2.5px 0 0 var(--brand);
+}
+.tbl tbody tr.hit td { background: #fafcff; }
+.tbl tbody tr.hit:hover td { background: #f4f9ff; }
+.tbl tbody tr.hit .metal { color: var(--brand-2); }
+
+/* ===================== 参数设置页 ===================== */
+#paramPage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+/* 表单三列铺满卡片 */
+#paramForm { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.param-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 16px;
+  align-items: start;
+}
+.param-side { display: flex; flex-direction: column; gap: 16px; }
+
+.param-no-params {
+  padding: 28px 4px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-4);
+}
+
+/* 清洁任务没有参数：收成单列居中，只留指令预览与运行信息 */
+#paramPage.is-clean .param-grid {
+  grid-template-columns: minmax(0, 720px);
+  justify-content: center;
+}
+#paramPage.is-clean .param-grid > .card:first-child { display: none; }
+#paramPage.is-clean .param-side { gap: 16px; }
+
+/* 底部操作条：居中，主按钮放大突出 */
+.param-actions {
+  /* 三栏：取消靠右贴住、主按钮精确居中、右侧留空 */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0 10px;
+  flex: none;
+}
+.param-actions .btn-cancel { grid-column: 1; justify-self: end; }
+.param-actions .btn-run { grid-column: 2; justify-self: center; }
+.param-actions .btn-cancel {
+  height: 46px;
+  min-width: 96px;
+  padding: 0 20px;
+  font-size: 14px;
+  color: var(--ink-3);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.param-actions .btn-cancel:hover {
+  background: #eef2f8;
+  border-color: transparent;
+  color: var(--ink-2);
+}
+/* 执行任务的主按钮：整页最醒目的操作 */
+.param-actions .btn-run {
+  height: 48px;
+  min-width: 240px;
+  padding: 0 34px;
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(180deg, #2f8bff, var(--brand));
+  border-color: var(--brand);
+  box-shadow: 0 6px 18px rgba(22, 119, 255, .30);
+  transition: transform .16s, box-shadow .16s, background .16s;
+}
+.param-actions .btn-run:hover {
+  background: linear-gradient(180deg, #2f8bff, var(--brand-2));
+  box-shadow: 0 9px 24px rgba(22, 119, 255, .36);
+  transform: translateY(-1px);
+}
+.param-actions .btn-run:active { transform: translateY(0); }
+
+@media (max-width: 1500px) {
+  #paramForm { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1180px) {
+  .param-grid { grid-template-columns: minmax(0, 1fr); }
+  #paramPage { min-height: 0; }
+  #paramForm { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 780px) {
+  #paramForm { grid-template-columns: minmax(0, 1fr); }
+  .param-actions { grid-template-columns: 1fr; justify-items: center; gap: 10px; }
+  .param-actions .btn-run { grid-column: 1; order: 1; width: 100%; max-width: 340px; }
+  .param-actions .btn-cancel { grid-column: 1; order: 2; height: 40px; }
+}
+
+/* =====================================================================
+ * 视觉规范层
+ * ---------------------------------------------------------------------
+ * 从这里往下是统一设计语言，覆盖上面各组件的基础样式。
+ * 放在响应式之前，媒体查询依旧可以按屏幕宽度做覆盖。
+ * ===================================================================*/
+
+/* ---------- 全局 ---------- */
+::selection { background: rgba(22, 119, 255, .16); }
+
+/* 细滚动条：不抢视觉，也不消失 */
+* { scrollbar-width: thin; scrollbar-color: #cfd8e5 transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb {
+  background: #cfd8e5;
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: #b6c2d3; background-clip: content-box; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* 键盘可达性：统一焦点环 */
+.btn:focus-visible,
+.nav-btn:focus-visible,
+.mode-card:focus-visible,
+.field input:focus-visible,
+.hist-filter-select:focus-visible,
+.btn-connect:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+/* ---------- 顶部标题栏 ---------- */
+.app-header {
+  background: rgba(255, 255, 255, .88);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+}
+.app-header h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  letter-spacing: .2px;
+}
+/* 品牌标记：渐变方块 + 白色波形 */
+.app-header h1::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  flex: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Cpath d='M4.5 14.2l3.8-4.8 3 2.9 5.9-6.4' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 15px 15px no-repeat,
+    linear-gradient(135deg, #1677ff 0%, #4f9dff 100%);
+  box-shadow: 0 2px 6px rgba(22, 119, 255, .30);
+}
+
+/* ---------- 侧边导航 ---------- */
+.side-nav { padding: 12px 10px; }
+.side-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .8px;
+  color: var(--ink-5);
+  padding: 14px 10px 6px;
+  text-transform: uppercase;
+}
+.side-label:first-child { padding-top: 4px; }
+
+.nav-btn {
+  height: 36px;
+  padding: 0 10px;
+  margin-bottom: 2px;
+  border-radius: var(--r);
+  font-size: 13.5px;
+  letter-spacing: .1px;
+  transition: background .16s, color .16s, box-shadow .16s;
+}
+.nav-btn .ico { opacity: .62; transition: opacity .16s; }
+.nav-btn:hover { background: #f4f7fc; color: var(--ink); }
+.nav-btn:hover .ico { opacity: .85; }
+.nav-btn.active {
+  background: var(--brand-soft);
+  color: var(--brand-2);
+  font-weight: 600;
+  box-shadow: inset 2.5px 0 0 var(--brand);
+}
+.nav-btn.active .ico { opacity: 1; color: var(--brand); }
+
+/* ---------- 页面顶栏 ---------- */
+.topbar {
+  min-height: 56px;
+  background: rgba(255, 255, 255, .72);
+  backdrop-filter: saturate(140%) blur(8px);
+}
+.topbar .where h2 {
+  font-size: 16.5px;
+  font-weight: 650;
+  letter-spacing: .2px;
+  color: var(--ink);
+}
+
+/* ---------- 内容区 ---------- */
+.content { padding: 20px 24px 40px; }
+.focus-grid,
+.hist-grid,
+.device-grid { gap: 16px; }
+.mode-cards { gap: 16px; }
+
+/* ---------- 卡片 ---------- */
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  transition: box-shadow .18s, border-color .18s;
+}
+.card-head {
+  padding: 14px 20px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.card-head h3 {
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: .1px;
+  color: var(--ink);
+}
+.card-body { padding: 18px 20px; }
+
+/* ---------- 表格 ---------- */
+.tbl thead th {
+  padding: 11px 14px;
+  background: linear-gradient(180deg, #f7faff, #f4f8ff);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  color: var(--ink-4);
+  border-bottom: 1px solid var(--line);
+}
+.tbl thead th:first-child { padding-left: 20px; }
+.tbl thead th:last-child { padding-right: 20px; }
+.tbl tbody td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.tbl tbody td:first-child { padding-left: 20px; }
+.tbl tbody td:last-child { padding-right: 20px; }
+.tbl tbody tr:hover td { background: #f7faff; }
+.tbl .metal { font-size: 14px; font-weight: 600; letter-spacing: .4px; }
+.tbl tbody td.num:not(.empty):not(.muted) { font-size: 15px; font-weight: 600; }
+
+/* ---------- 指标格 ---------- */
+.metrics { gap: 10px; padding: 14px 16px 16px; }
+.metric {
+  background: #f8fafd;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r);
+  padding: 11px 13px;
+  transition: background .16s, border-color .16s;
+}
+.metric:hover { border-color: var(--brand-line); }
+
+/* 指标按含义分三组着色：扫描条件 / 电流统计 / 采集信息 */
+.metric.m-scan {
+  background: linear-gradient(160deg, rgba(22, 119, 255, .14), rgba(22, 119, 255, .04));
+  border-color: rgba(22, 119, 255, .22);
+}
+.metric.m-cur {
+  background: linear-gradient(160deg, rgba(13, 148, 136, .14), rgba(13, 148, 136, .04));
+  border-color: rgba(13, 148, 136, .22);
+}
+.metric.m-meta {
+  background: linear-gradient(160deg, rgba(122, 90, 248, .14), rgba(122, 90, 248, .04));
+  border-color: rgba(122, 90, 248, .22);
+}
+/* 数值跟随分组色 */
+.metric.m-scan .v { color: #1060d8; }
+.metric.m-cur .v { color: #0b7c72; }
+.metric.m-meta .v { color: #6244d8; }
+.metric.m-scan:hover { border-color: rgba(22, 119, 255, .38); }
+.metric.m-cur:hover { border-color: rgba(13, 148, 136, .38); }
+.metric.m-meta:hover { border-color: rgba(122, 90, 248, .38); }
+.metric .k {
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: .2px;
+  color: var(--ink-4);
+  margin-bottom: 4px;
+}
+.metric .v { font-size: 16px; letter-spacing: -.2px; }
+
+/* ---------- 按钮 ---------- */
+.btn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r);
+  border: 1px solid #dfe6ef;
+  background: #fff;
+  color: var(--ink-2);
+  box-shadow: 0 1px 1.5px rgba(15, 23, 42, .03);
+  transition: background .16s, border-color .16s, color .16s, box-shadow .16s;
+}
+.btn:hover { background: #f7f9fc; border-color: #cfd9e6; }
+.btn:active { background: #eff3f9; }
+.btn-sm { height: 28px; padding: 0 11px; font-size: 12.5px; border-radius: var(--r-sm); }
+.btn-primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(22, 119, 255, .28);
+}
+.btn-primary:hover { background: var(--brand-2); border-color: var(--brand-2); }
+.btn-danger { color: var(--red); border-color: var(--red-line); }
+.btn-danger:hover { background: var(--red-soft); border-color: #f0b4b4; }
+
+/* ---------- 表单 ---------- */
+.field label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .1px;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.field input,
+.field select {
+  width: 100%;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid #dfe6ef;
+  border-radius: var(--r);
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  transition: border-color .16s, box-shadow .16s;
+}
+.field input:hover { border-color: #cfd9e6; }
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: var(--ring);
+}
+.form-grid { gap: 14px 18px; }
+
+/* ---------- 读数 / 卡片头小指标 ---------- */
+.readout .k { font-size: 11px; letter-spacing: .3px; color: var(--ink-4); }
+.readout .v { font-size: 15.5px; letter-spacing: -.2px; }
+
+/* ---------- 模式卡（首页） ---------- */
+.mode-card {
+  border-radius: var(--r-lg);
+  padding: 20px 20px 18px;
+  transition: border-color .18s, box-shadow .18s, transform .18s;
+}
+.mode-card:hover {
+  border-color: var(--brand-line);
+  box-shadow: 0 6px 20px rgba(22, 119, 255, .10);
+  transform: translateY(-2px);
+}
+.mode-card .ico { box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .03); }
+.mode-card b { font-size: 15px; letter-spacing: .1px; }
+.mode-card .go { font-size: 12.5px; font-weight: 600; }
+
+/* ---------- 历史条目 ---------- */
+.hist-item {
+  background: #fff;
+  border-radius: var(--r-lg);
+  transition: border-color .16s, background .16s, box-shadow .16s;
+}
+.hist-item:hover { border-color: var(--brand-line); background: #fbfdff; }
+.hist-item.active {
+  border-color: var(--brand);
+  background: #f7faff;
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, .08);
+}
+
+/* ---------- 筛选下拉 ---------- */
+.hist-filter-select {
+  height: 30px;
+  border-radius: var(--r);
+  border-color: #dfe6ef;
+  color: var(--ink-2);
+  box-shadow: 0 1px 1.5px rgba(15, 23, 42, .03);
+  transition: border-color .16s, box-shadow .16s;
+}
+.hist-filter-select:hover { border-color: #cfd9e6; }
+.hist-filter-select:focus { border-color: var(--brand); box-shadow: var(--ring); }
+
+/* ---------- 弹窗 ---------- */
+.overlay { background: rgba(15, 23, 38, .42); backdrop-filter: blur(3px); }
+.modal { border-radius: var(--r-xl); box-shadow: var(--sh-4); }
+.modal-head { border-bottom: 1px solid var(--line-soft); }
+
+/* ---------- 设备列表 ---------- */
+.dev-item { border-radius: var(--r); transition: border-color .16s, background .16s; }
+.dev-item:hover { border-color: var(--brand-line); background: #fbfdff; }
+.dev-item.editing {
+  border-color: var(--brand);
+  background: #f7faff;
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, .08);
+}
+
+/* ---------- 深色化处理后的状态胶囊 ---------- */
+.conn-status {
+  border-radius: 99px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+.btn-connect { height: 32px; border-radius: var(--r); font-size: 13px; }
+
+/* =====================================================================
+ * 色彩细节强化（纯装饰，不涉及内容）
+ * ===================================================================*/
+
+/* 顶栏底部渐变细线 */
+.app-header { position: sticky; }
+.app-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #1677ff 0%, #4f6dff 45%, #7a5af8 100%);
+  opacity: .9;
+}
+
+/* 卡片顶部彩条：默认蓝，按模块覆盖 */
+.card { position: relative; }
+.card::before {
+  content: "";
+  display: block;
+  height: 3px;
+  flex: none;
+  background: linear-gradient(90deg, #1677ff, #4f9dff);
+}
+.chart-card::before   { background: linear-gradient(90deg, #1677ff, #22d3ee); }
+.hm-card::before      { background: linear-gradient(90deg, #3f6bff, #7a5af8); }
+.stats-strip::before  { background: linear-gradient(90deg, #0d9488, #22b8cf); }
+.home-grid > .card:nth-child(1)::before { background: linear-gradient(90deg, #d9820a, #f5a524); }
+.home-grid > .card:nth-child(2)::before { background: linear-gradient(90deg, #1677ff, #4f9dff); }
+.home-grid > .card:nth-child(3)::before { background: linear-gradient(90deg, #0d9488, #2bb3a3); }
+.device-grid .card::before { background: linear-gradient(90deg, #7a5af8, #a78bfa); }
+.param-grid .card::before  { background: linear-gradient(90deg, #1677ff, #7a5af8); }
+.home-params::before { background: linear-gradient(90deg, #0d9488, #7a5af8); }
+
+/* 侧栏选中项柔光 */
+.nav-btn.active { box-shadow: inset 2.5px 0 0 var(--brand), 0 2px 10px rgba(22, 119, 255, .12); }
+#navClean.active   { box-shadow: inset 2.5px 0 0 var(--accent-teal), 0 2px 10px rgba(13, 148, 136, .14); }
+#navHistory.active { box-shadow: inset 2.5px 0 0 var(--accent-amber), 0 2px 10px rgba(217, 130, 10, .14); }
+#navDevice.active  { box-shadow: inset 2.5px 0 0 var(--accent-violet), 0 2px 10px rgba(122, 90, 248, .14); }
+
+/* 表格斑马纹 + 更明显的悬停 */
+.tbl tbody tr:nth-child(even) td { background: #fafcff; }
+.tbl tbody tr.hit td { background: #f4f9ff; }
+.tbl tbody tr.hit:nth-child(even) td { background: #eff6ff; }
+.tbl tbody tr:hover td { background: #eef5ff !important; }
+
+/* 次要按钮：悬停带色彩 */
+.btn:hover {
+  background: #f4f8ff;
+  border-color: #bcd3ff;
+  color: #1060d8;
+}
+
+/* 卡片悬停微抬 */
+.card:hover { box-shadow: 0 6px 20px rgba(22, 119, 255, .10); border-color: #d9e6fb; }
+
+/* 输入框悬停 */
+.field input:hover { border-color: #bcd3ff; background: #fcfdff; }
+
+/* 历史条目：左侧任务色条 */
+.hist-item { position: relative; overflow: hidden; }
+.hist-item::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #1677ff, #4f9dff);
+}
+.hist-item.clean::before { background: linear-gradient(180deg, #0d9488, #2bb3a3); }
+
+/* 设备条目：选中时左侧紫条 */
+.dev-item { position: relative; }
+.dev-item.editing::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 6px; bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #7a5af8, #a78bfa);
+}
+
+/* 滚动条带品牌色 */
+*::-webkit-scrollbar-thumb { background: #c7d6ec; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: #a9c0e2; background-clip: content-box; }
+
+/* ===================== 响应式 ===================== */
+@media (max-width: 1180px) {
+  #detectPage { min-height: 0; }
+  .hh-conn { padding-left: 0; border-left: none; }
+  .run-strip { padding: 12px 14px; gap: 10px 0; }
+  .rs-item { padding: 0 14px; }
+  .focus-grid { grid-template-columns: minmax(0, 1fr); }
+  .device-grid { grid-template-columns: minmax(0, 1fr); }
+  .hist-grid { grid-template-columns: minmax(0, 1fr); }
+  .mode-cards { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 780px) {
+  :root { --header-h: auto; }
+  .app-header { padding: 10px 14px; flex-wrap: wrap; height: auto; }
+  .app-header h1 { font-size: 14px; }
+  .app-body { flex-direction: column; }
+  .side {
+    width: 100%;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+  }
+  .side-nav { display: flex; gap: 3px; padding: 8px; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+  .side-label { display: none; }
+  .nav-btn { width: auto; height: 32px; white-space: nowrap; padding: 0 12px; margin: 0; font-size: 13px; }
+  .nav-btn .ico { display: none; }
+  /* 横排时左侧竖条会显得突兀，改用填充式选中 */
+  .nav-btn.active { box-shadow: none; }
+  .app-header { border-bottom: 1px solid var(--line); }
+  .topbar { min-height: 44px; }
+  .hist-filter { padding: 10px 14px 0; }
+  .topbar { padding: 8px 14px; align-items: flex-start; gap: 8px; }
+  .topbar .where { flex: 1 1 100%; }
+  .topbar .where h2 { font-size: 14px; }
+  .topbar .tools { flex: 1 1 100%; min-width: 0; gap: 8px; }
+  .conn-status, .btn-connect { flex: none; }
+  .content { padding: 12px 14px 28px; }
+  .hero { padding: 13px 14px; }
+  .hero h2 { font-size: 14px; }
+  .mode-cards { grid-template-columns: 1fr; }
+  .card-head { padding: 11px 14px; }
+  .card-body { padding: 13px 14px; }
+  .metrics { padding: 10px; gap: 8px; grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+  #chart { height: 380px; }
+  #historyChart { height: 300px; }
+}
+</style>
+
+
+<body>
+<div class="app">
+
+  <!-- ===================== 顶部标题栏 ===================== -->
+  <header class="app-header">
+    <h1>直插式土壤重金属电化学检测系统</h1>
+  </header>
+
+  <div class="app-body">
+
+  <!-- ===================== 侧边导航 ===================== -->
+  <aside class="side">
+    <nav class="side-nav">
+      <div class="side-label">工作模式</div>
+      <button type="button" class="nav-btn" id="navHome" onclick="backToHome()">
+        <span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/></svg></span><span>主界面</span>
+      </button>
+      <button type="button" class="nav-btn" id="navDetect" onclick="navDetect()">
+        <span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2.5-7 4 14 2.5-7h7"/></svg></span><span>检测任务</span>
+      </button>
+      <button type="button" class="nav-btn" id="navClean" onclick="navClean()">
+        <span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 6.9 8.9a7.2 7.2 0 1 0 10.2 0z"/></svg></span><span>清洁任务</span>
+      </button>
+      <div class="side-label">数据</div>
+      <button type="button" class="nav-btn" id="navHistory" onclick="navHistory()">
+        <span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg></span><span>历史记录</span>
+      </button>
+      <div class="side-label">系统</div>
+      <button type="button" class="nav-btn" id="navDevice" onclick="navDevice()">
+        <span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M6 12h.01M6 16h.01"/><path d="M10 8h8M10 12h8M10 16h8"/></svg></span><span>设备管理</span>
+      </button>
+    </nav>
+  </aside>
+
+  <!-- ===================== 主区域 ===================== -->
+  <div class="main">
+
+    <header class="topbar">
+      <div class="where">
+        <!-- 常驻"主界面"按钮：所有页面都能回到首页模式选择页。
+             已在首页时自动隐藏（见 syncHomeBtn）。 -->
+        <button type="button" id="btnHome" class="btn btn-sm" onclick="backToHome()"
+          title="返回主界面（模式选择）" style="flex:none;">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/></svg> 主界面
+        </button>
+        <h2 id="pageTitle">检测任务</h2>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- ---------- 首页 ---------- -->
+      <div id="homePage">
+        <!-- 概览条 -->
+        <section class="home-hero">
+          <div class="hh-text">
+            <h2>土壤重金属快速检测</h2>
+          </div>
+          <div class="hh-stats">
+            <div class="hh-stat">
+              <span class="k">累计检测</span>
+              <span class="v" id="homeRuns">0</span>
+              <span class="u">次</span>
+            </div>
+            <div class="hh-stat">
+              <span class="k">设备</span>
+              <span class="v" id="homeDevices">0</span>
+              <span class="u">台</span>
+            </div>
+            <div class="hh-stat">
+              <span class="k">当前设备</span>
+              <span class="v txt" id="homeActiveDevice">--</span>
+            </div>
+          </div>
+
+          <!-- 连接设备：与设备管理页共用同一套状态 -->
+          <div class="hh-conn">
+            <span id="connStatusHome" class="conn-status">未连接</span>
+            <button id="btnConnectHome" class="btn-connect" type="button"
+              onclick="toggleConnect()">连接设备</button>
+          </div>
+        </section>
+
+        <!-- 模式入口 -->
+        <div class="mode-cards">
+          <button type="button" class="mode-card mc-blue" onclick="navDetect()">
+            <span class="ico" style="color:#2563eb;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2.5-7 4 14 2.5-7h7"/></svg></span>
+            <b>检测任务</b>
+            <span class="ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2.5-7 4 14 2.5-7h7"/></svg></span>
+            <span class="go">开始检测 →</span>
+          </button>
+
+          <button type="button" class="mode-card mc-teal" onclick="navClean()">
+            <span class="ico" style="color:#16a34a;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 6.9 8.9a7.2 7.2 0 1 0 10.2 0z"/></svg></span>
+            <b>清洁任务</b>
+            <span class="ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 6.9 8.9a7.2 7.2 0 1 0 10.2 0z"/></svg></span>
+            <span class="go" style="color:#16a34a;">开始清洁 →</span>
+          </button>
+
+          <button type="button" class="mode-card mc-amber" onclick="navHistory()">
+            <span class="ico" style="color:#e8890c;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg></span>
+            <b>历史记录</b>
+            <span class="meta" id="homeHisMeta">暂无记录</span>
+            <span class="ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg></span>
+            <span class="go" style="color:#2563eb;">查看记录 →</span>
+          </button>
+        </div>
+
+        <!-- 最近检测 + 峰值趋势 -->
+        <div class="home-grid">
+          <section class="card">
+            <div class="card-head">
+              <h3>最近检测</h3>
+              <button type="button" class="btn btn-sm" onclick="navHistory()">全部记录</button>
+            </div>
+            <div id="homeRecent" class="home-recent"></div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <h3>峰值电流趋势</h3>
+              <span class="acq-info" id="homeSparkInfo"></span>
+            </div>
+            <div id="homeSpark" class="home-spark"></div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <h3>最近一次结果</h3>
+              <span class="acq-info" id="homeResultInfo"></span>
+            </div>
+            <div id="homeResult" class="home-result"></div>
+          </section>
+        </div>
+
+        <!-- 当前检测参数 -->
+        <section class="card home-params">
+          <div class="card-head">
+            <h3>当前检测参数</h3>
+            <button type="button" class="btn btn-sm" onclick="navDetect()">去修改</button>
+          </div>
+          <div id="homeParams" class="param-chips"></div>
+        </section>
+
+        <p id="homeError" class="note plain" style="display:none; margin-top:16px; border-radius:10px; border:1px solid var(--red-line); background:var(--red-soft); color:var(--red);"></p>
+      </div>
+
+      <!-- ---------- 检测结果页 ---------- -->
+      <div id="detectPage" class="hidden">
+        <!-- 结果摘要：把"这次是谁、什么时候、什么条件测的"集中到一条 -->
+        <section class="run-strip">
+          <div class="rs-item">
+            <span class="k">检测时间</span>
+            <span class="v" id="runTime">--</span>
+          </div>
+          <div class="rs-item">
+            <span class="k">来源设备</span>
+            <span class="v" id="runDevice">--</span>
+          </div>
+          <div class="rs-item">
+            <span class="k">扫描范围</span>
+            <span class="v mono" id="runRange">--</span>
+          </div>
+          <div class="rs-item">
+            <span class="k">采样点数</span>
+            <span class="v mono" id="runPoints">--</span>
+          </div>
+          <div class="rs-item">
+            <span class="k">沉积时间</span>
+            <span class="v mono" id="runDeposit">--</span>
+          </div>
+        </section>
+
+        <div class="focus-grid">
+
+          <!-- 重点 1：伏安曲线 -->
+          <section class="card chart-card">
+            <div class="card-head">
+              <h3>伏安特性曲线 (I-V)</h3>
+              <div style="display:flex; align-items:center; gap:12px;">
+
+                <div class="readout">
+                  <div class="k">沉积时间</div>
+                  <div id="depositTime" class="v">--</div>
+                </div>
+                <button type="button" class="btn btn-sm"
+                  onclick="exportLiveCurve()" title="导出电位与电流数据">导出数据</button>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <div id="chart"></div>
+            </div>
+          </section>
+
+          <div class="focus-side">
+            <!-- 重点 2：重金属检测结果 -->
+            <section class="card hm-card">
+              <div class="card-head">
+                <h3>重金属检测结果</h3>
+                <span class="hit-badge" id="hmHitBadge">未开始</span>
+              </div>
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>种类</th>
+                    <th>对应电位 (V)</th>
+                    <th>浓度 (mg/kg)</th>
+                    <th>峰值电流 (μA)</th>
+                  </tr>
+                </thead>
+                <tbody id="hmBody">
+                  <!-- 由 renderSpeciesTable() 填充 -->
+                </tbody>
+              </table>
+            </section>
+
+            <!-- 辅助信息：数据统计（视觉次要） -->
+            <section class="card stats-strip">
+              <div class="card-head">
+                <h3>数据统计</h3>
+                <button type="button" class="btn btn-sm" onclick="clearChart()">清空曲线</button>
+              </div>
+              <div class="metrics">
+                    <div class="metric m-scan"><div class="k">扫描范围</div><div id="voltRange" class="v">--</div></div>
+                <div class="metric m-scan"><div class="k">阶跃步长</div><div id="stepSize" class="v">--</div></div>
+                <div class="metric m-cur"><div class="k">峰值电流 (μA)</div><div id="valMax" class="v accent">--</div></div>
+                <div class="metric m-cur"><div class="k">谷值电流 (μA)</div><div id="valMin" class="v">--</div></div>
+                <div class="metric m-cur"><div class="k">平均值 (μA)</div><div id="valAvg" class="v">--</div></div>
+                <div class="metric m-cur"><div class="k">峰谷差 ΔI (μA)</div><div id="valDelta" class="v">--</div></div>
+                <div class="metric m-meta"><div class="k">采样点数</div><div id="valPoints" class="v">--</div></div>
+                <div class="metric m-meta"><div class="k">沉积时间 (s)</div><div id="valDeposit" class="v">--</div></div>
+              </div>
+            </section>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ---------- 历史记录页 ---------- -->
+      <div id="historyPage" class="hidden">
+        <div class="hist-grid">
+
+          <section class="card">
+            <div class="card-head">
+              <h3>历史记录</h3>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:nowrap;">
+                <span id="cmpCount" style="font-size:12px; color:var(--ink-4); white-space:nowrap;"></span>
+                <button type="button" class="btn btn-sm" onclick="clearCompare()">清空选择</button>
+                <button type="button" class="btn btn-sm btn-danger" onclick="clearAllHistory()">清空全部</button>
+              </div>
+            </div>
+            <div class="hist-filter">
+              <span class="hist-filter-hint">勾选多条可叠加对比</span>
+              <select id="histDeviceFilter" class="hist-filter-select"
+                onchange="onHistoryDeviceFilterChange()" title="按设备筛选">
+                <option value="">全部设备</option>
+              </select>
+            </div>
+            <div id="historyList" class="hist-list"></div>
+          </section>
+
+          <div class="col-stack">
+            <section class="card">
+              <div class="card-head">
+                <h3>历史伏安曲线</h3>
+                <div class="his-readout" id="hisDeviceReadout">
+                  <span class="k">设备</span>
+                  <span class="v" id="hisDeviceName">--</span>
+                </div>
+                <div class="his-readout" id="hisDepositReadout">
+                  <span class="k">沉积时间</span>
+                  <span class="v" id="hisDepositTime">--</span>
+                </div>
+                <button type="button" class="btn btn-sm" style="margin-left:auto;"
+                  onclick="exportHistoryCurve()" title="导出电位与电流数据">导出数据</button>
+              </div>
+              <div class="chart-wrap">
+                <div id="historyChart"></div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-head"><h3>数据统计</h3></div>
+              <div class="metrics" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="metric m-scan"><div class="k">扫描范围</div><div id="hisVoltRange" class="v">--</div></div>
+                <div class="metric m-cur"><div class="k">峰值电流 (μA)</div><div id="hisValMax" class="v accent">--</div></div>
+                <div class="metric m-cur"><div class="k">平均值 (μA)</div><div id="hisValAvg" class="v">--</div></div>
+              </div>
+            </section>
+
+            <section class="card hm-card" id="hisSpeciesCard">
+              <div class="card-head"><h3>重金属检测结果</h3></div>
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>种类</th>
+                    <th>对应电位 (V)</th>
+                    <th>浓度 (mg/kg)</th>
+                    <th>峰值电流 (μA)</th>
+                  </tr>
+                </thead>
+                <tbody id="hmBodyHis">
+                  <!-- 由 renderHistorySpecies() 填充 -->
+                </tbody>
+              </table>
+            </section>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ---------- 设备管理页 ---------- -->
+      <div id="devicePage" class="hidden">
+        <div class="device-grid">
+
+          <!-- 设备列表 -->
+          <section class="card">
+            <div class="card-head">
+              <h3>设备列表</h3>
+              <button type="button" class="btn btn-sm btn-primary" onclick="newDevice()">+ 新增</button>
+            </div>
+            <div id="deviceList" class="dev-list"></div>
+          </section>
+
+          <div class="col-stack">
+            <!-- 选中设备的配置 -->
+            <section class="card">
+              <div class="card-head">
+                <h3>设备配置</h3>
+                <button type="button" class="btn btn-sm" onclick="resetDeviceForm()">恢复默认</button>
+              </div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="field">
+                    <label>设备名称</label>
+                    <input id="d_name" type="text" spellcheck="false" autocomplete="off" placeholder="例如 一号检测仪">
+                  </div>
+                  <div class="field">
+                    <label>服务器地址</label>
+                    <input id="d_host" type="text" spellcheck="false" autocomplete="off">
+                  </div>
+                  <div class="field">
+                    <label>端口</label>
+                    <input id="d_port" type="number" min="1" max="65535" step="1">
+                  </div>
+                  <div class="field">
+                    <label>订阅主题（设备 → 页面）</label>
+                    <input id="d_sub" type="text" spellcheck="false" autocomplete="off">
+                  </div>
+                  <div class="field">
+                    <label>发布主题（页面 → 设备）</label>
+                    <input id="d_pub" type="text" spellcheck="false" autocomplete="off">
+                  </div>
+                </div>
+
+                <label class="switch-row">
+                  <input id="d_tls" type="checkbox">
+                  <span>使用加密连接（TLS / wss）</span>
+                </label>
+
+                <div class="device-actions">
+                  <button type="button" class="btn btn-primary" onclick="saveDeviceForm()">保存</button>
+                  <button type="button" class="btn" onclick="setActiveDevice()">设为当前</button>
+                  <button type="button" class="btn btn-danger" onclick="deleteDevice()">删除</button>
+                </div>
+              </div>
+            </section>
+
+            <!-- 运行状态 -->
+            <section class="card">
+              <div class="card-head">
+                <h3>运行状态</h3>
+                <div class="conn-tools">
+                  <span id="connStatus" class="conn-status">未连接</span>
+                  <button id="btnConnect" class="btn-connect" type="button" onclick="toggleConnect()">连接设备</button>
+                </div>
+              </div>
+              <div class="metrics">
+                <div class="metric"><div class="k">当前设备</div><div id="d_active" class="v">--</div></div>
+                <div class="metric"><div class="k">连接状态</div><div id="d_state" class="v">未连接</div></div>
+                <div class="metric"><div class="k">已收消息</div><div id="d_count" class="v">0</div></div>
+                <div class="metric"><div class="k">最后收报文</div><div id="d_last" class="v">--</div></div>
+                <div class="metric"><div class="k">客户端标识</div><div id="d_client" class="v">--</div></div>
+              </div>
+            </section>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ---------- 参数设置页 ---------- -->
+      <div id="paramPage" class="hidden">
+        <div class="param-grid">
+
+          <!-- 参数表单 -->
+          <section class="card">
+            <div class="card-head">
+              <h3 id="paramPageTitle">检测参数</h3>
+              <button type="button" class="btn btn-sm" id="btnResetParams" onclick="resetParamForm()">恢复默认</button>
+            </div>
+            <div class="card-body">
+              <!-- 字段顺序与设备手册的参数下发顺序一致：
+                   起始 / 终止 / 脉冲 / 步进 / 沉积 / 沉积时间 / 增益 / 方波频率 -->
+              <div class="form-grid" id="paramForm">
+                <div class="field"><label>起始电位 (V)</label><input id="m_p1" type="number" value="-1.2" step="0.01" data-preview></div>
+                <div class="field"><label>终止电位 (V)</label><input id="m_p2" type="number" value="0.2" step="0.01" data-preview></div>
+                <div class="field"><label>脉冲高度 (V)</label><input id="m_p6" type="number" value="0.05" step="0.001" data-preview></div>
+                <div class="field"><label>步进电位 (V)</label><input id="m_p5" type="number" value="0.005" step="0.001" data-preview></div>
+                <div class="field"><label>沉积电位 (V)</label><input id="m_p3" type="number" value="-1.2" step="0.01" data-preview></div>
+                <div class="field"><label>沉积时间 (s)</label><input id="m_p4" type="number" value="200" data-preview></div>
+                <div class="field"><label>增益电阻 (KΩ)</label><input id="m_p8" type="number" value="10" data-preview></div>
+                <div class="field"><label>方波频率 (Hz)</label><input id="m_p7" type="number" value="25" data-preview></div>
+              </div>
+
+              <div id="paramNoParams" class="param-no-params hidden">
+                清洁任务使用固定指令，不携带参数。
+              </div>
+
+            </div>
+          </section>
+
+          <!-- 运行信息 -->
+          <div class="param-side">
+            <section class="card">
+              <div class="card-head"><h3>运行信息</h3></div>
+              <div class="metrics">
+                <div class="metric m-meta"><div class="k">当前设备</div><div id="paramDevice" class="v txt">--</div></div>
+                <div class="metric m-scan" id="pmPoints"><div class="k">预计点数</div><div id="paramPoints" class="v">--</div></div>
+                <div class="metric m-scan" id="pmRange"><div class="k">扫描范围</div><div id="paramRange" class="v txt">--</div></div>
+                <div class="metric m-cur" id="pmDeposit"><div class="k">沉积时间</div><div id="paramDeposit" class="v">--</div></div>
+              </div>
+            </section>
+          </div>
+
+        </div>
+
+        <div class="param-actions">
+          <button type="button" class="btn btn-cancel" onclick="closeParamPage()">取消</button>
+          <button type="button" id="btnStart" class="btn btn-primary btn-run" onclick="startTask()">开始检测</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- ===================== 等待弹窗 ===================== -->
+<div id="waitingModal" class="overlay hidden">
+  <div class="modal modal-sm">
+    <div class="centered">
+      <div class="spinner"></div>
+      <h3>检测中，请稍候</h3>
+      <p id="waitingHint">正在执行扫描，请勿断开连接</p>
+      <button type="button" class="btn btn-danger" onclick="cancelTask()" style="width:100%;">取消工作</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 提示弹窗 ===================== -->
+<div id="tipModal" class="overlay hidden">
+  <div class="modal modal-sm">
+    <div class="centered">
+      <div class="big-icon">&#9888;&#65039;</div>
+      <h3 id="tipTitle">请先连接设备</h3>
+      <p id="tipText">执行检测/清洁任务前，请先连接设备</p>
+      <button type="button" class="btn btn-primary" onclick="closeTipModal()" style="width:100%;">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 发送确认弹窗 =====================
+     每次向设备下发数据前弹出，点「确定」才真正发送。
+     只做确认，不显示任何内容或说明文字。
+     z-index 高于参数弹窗，因此可以在参数弹窗之上叠加显示。 -->
+<div id="confirmModal" class="overlay hidden" style="z-index:60;">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <h3>确认发送</h3>
+      <button type="button" class="x" onclick="closeConfirm(false)">&times;</button>
+    </div>
+    <div class="modal-foot" style="padding-top:20px;">
+      <button type="button" class="btn" onclick="closeConfirm(false)">取消</button>
+      <button type="button" class="btn btn-primary" onclick="closeConfirm(true)">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 数据链路警示条 ===================== -->
+<div id="rawWarn" class="hidden">
+  <div class="inner">
+    <div style="flex:1; min-width:0;">
+      <p class="ttl">已收到数据，但未能解析出曲线数据</p>
+      <p id="rawWarnText"></p>
+    </div>
+    <button type="button" class="btn btn-sm" onclick="hideRawWarn()" style="flex:none;">关闭</button>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+ * 协议配置：与固件文档不一致时只改这一段
+ * ===================================================================*/
+const PROTOCOL = {
+  /* ---------------------------------------------------------------------
+   * 指令帧（依据设备手册）
+   * ---------------------------------------------------------------------
+   * 检测（SWV）：
+   *   @M0@S ^起始*^终止*^脉冲*^步进*^沉积*^沉积时间*^增益*^频率* &@W
+   *   └方法┘└设置┘                                                 └结束┘
+   *
+   * 清洁：
+   *   @M5@W        （单条指令，不带参数）
+   *
+   * 其他方法供参考：@W=SWV、@M1@W=NPV、@M2@W=DPV、
+   *                @M3@W=SCV、@M4@W=CV、@M6@W=LSV
+   * -------------------------------------------------------------------*/
+  task: {
+    DETECTION: { head: '@M0@S', tail: '&@W', label: '检测任务', action: '开始检测', withParams: true },
+    CLEAN:     { head: '@M5@W', tail: '',     label: '清洁任务', action: '开始清洁', withParams: false }
+  },
+  /* 取消帧：手册未给出停止指令。
+   * 注意不能用 @W 开头 —— @W 本身是"启动 SWV"，会把取消变成再启动一次。
+   * 这里取"不携带参数的方法设置帧"，行为上等价于一次空设置；
+   * 若手册有明确停止指令，替换这一行即可。 */
+  cancelFrame: '@M0@S&@W',
+
+  /* 参数下发顺序（与手册标注严格一致）
+   * 起始电位 / 终止电位 / 脉冲高度 / 步进电位 / 沉积电位 / 沉积时间 / 增益电阻 / 方波频率 */
+  paramOrder: ['startMv', 'endMv', 'pulseMv', 'stepMv', 'depositMv', 'depositS', 'sensitivityK', 'sampleHz'],
+
+  /* 参数编码偏移：下发值 = 实际值 + 3000
+   * 例：起始电位 -1.2 V → -1200 mV → 1800
+   *     终止电位  0.2 V →  +200 mV → 3200
+   *     脉冲高度 0.05 V →   +50 mV → 3050
+   *     沉积时间  200 s →          3200
+   *     增益电阻   10 kΩ →         3010
+   *     方波频率   25 Hz →         3025 */
+  paramOffset: 3000,
+
+  /* ---------------------------------------------------------------------
+   * 检测完成后是否自动返回首页
+   * ---------------------------------------------------------------------
+   * 0    = 关闭（当前默认）—— 检测完成后停在结果页，由你手动返回
+   * 2000 = 曲线画出后停 2 秒，然后自动跳回首页
+   *
+   * 手动返回的方式：顶栏「主界面」按钮 / 侧边栏「主界面」。
+   * 多条回传帧到达会重置计时，不会在第一帧就跳走。
+   * -------------------------------------------------------------------*/
+  autoReturnHomeMs: 0,
+
+  voltScale: 1000,     // V -> mV（原注释写 x100，代码写 x1000，以固件为准）
+  currentScale: 10000, // raw -> μA（若灵敏度参与换算，改用 currentFromRaw）
+  // 起始电位只作为扫描基准，不参与数据点绘制：
+  // 第 index 个采样点电位 = start + (index + 1) * step，末点恰好落在终止电位。
+  sampleFirstPoint: false,
+
+  /* ---------------------------------------------------------------------
+   * 等待回传的超时（"未收到设备数据"判定）
+   * ---------------------------------------------------------------------
+   * 单次检测含沉积时间可能超过 30 分钟，因此这里必须给足余量，
+   * 否则会在检测途中误判为超时并关掉等待弹窗。
+   * 45 分钟 = 30 分钟检测 + 通信/沉积余量。
+   * -------------------------------------------------------------------*/
+  responseTimeoutMs: 45 * 60 * 1000,
+
+  /* ---------------------------------------------------------------------
+   * MQTT keepalive（秒）
+   * ---------------------------------------------------------------------
+   * 超过该时长没有收到任何报文，broker 会断开连接。
+   * 4G 链路抖动较多，60 秒过于激进（丢一两个 PINGRESP 就可能掉线），
+   * 这里放宽到 180 秒；连接参数里显式传入，不依赖库默认值。
+   * -------------------------------------------------------------------*/
+  keepaliveSec: 180
+};
+
+/* =====================================================================
+ * MQTT 配置
+ * ===================================================================*/
+const MQTT_CONFIG = {
+  host: 'broker.emqx.io',
+  port: 8083,
+  subTopic: 'device/sensor/data',
+  pubTopic: 'device/sensor/cmd',
+  useTLS: false, // 页面走 https 时必须改 true（wss）
+  // 关闭跨消息拼帧（收到 @DOF/@DOR 片段立即按单帧解析）。
+  // 用于对比"拼帧逻辑"是否影响结果，正常保持 true。
+  combineFrameEnabled: true
+};
+
+/* =====================================================================
+ * 设备配置持久化（支持多设备）
+ * ---------------------------------------------------------------------
+ * 存储结构：
+ *   { version: 2, activeId: <当前设备 id>, items: [ {id,name,host,...} ] }
+ * activeId 指向"使用中"的设备，连接时读取它的参数。
+ * 首次运行会把旧版单设备配置（swv_device_cfg）迁移成第一台设备。
+ * ===================================================================*/
+const DEVICE_KEY = 'swv_device_cfg_v2';
+const DEVICE_KEY_LEGACY = 'swv_device_cfg';
+
+/** 出厂默认值（新增设备 / 恢复默认时使用） */
+const DEVICE_DEFAULTS = {
+  host: 'broker.emqx.io',
+  port: 8083,
+  subTopic: 'device/sensor/data',
+  pubTopic: 'device/sensor/cmd',
+  useTLS: false
+};
+
+let deviceList = [];        // 全部设备
+let activeDeviceId = '';    // 使用中的设备 id
+let editingDeviceId = '';   // 正在编辑的设备 id
+
+/** 生成设备 id */
+function newDeviceId() {
+  return 'dev' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+}
+
+/** 用默认值 + 覆盖值构造一台设备（保留传入的 id） */
+function makeDevice(name, over) {
+  const o = over || {};
+  const port = Number(o.port);
+  return {
+    id: (typeof o.id === 'string' && o.id) ? o.id : newDeviceId(),
+    name: (typeof name === 'string' && name.trim()) ? name.trim() : '新设备',
+    host: (typeof o.host === 'string' && o.host) ? o.host : DEVICE_DEFAULTS.host,
+    port: (Number.isInteger(port) && port > 0 && port < 65536) ? port : DEVICE_DEFAULTS.port,
+    subTopic: (typeof o.subTopic === 'string' && o.subTopic) ? o.subTopic : DEVICE_DEFAULTS.subTopic,
+    pubTopic: (typeof o.pubTopic === 'string' && o.pubTopic) ? o.pubTopic : DEVICE_DEFAULTS.pubTopic,
+    useTLS: (typeof o.useTLS === 'boolean') ? o.useTLS : DEVICE_DEFAULTS.useTLS
+  };
+}
+
+function getActiveDevice() {
+  return deviceList.find(d => d.id === activeDeviceId) || null;
+}
+function getEditingDevice() {
+  return deviceList.find(d => d.id === editingDeviceId) || null;
+}
+
+/** 把"使用中"设备的参数套用到 MQTT_CONFIG（连接时读取） */
+function applyActiveDevice() {
+  const d = getActiveDevice();
+  if (!d) return;
+  MQTT_CONFIG.host = d.host;
+  MQTT_CONFIG.port = d.port;
+  MQTT_CONFIG.subTopic = d.subTopic;
+  MQTT_CONFIG.pubTopic = d.pubTopic;
+  MQTT_CONFIG.useTLS = !!d.useTLS;
+}
+
+/** 写回 localStorage */
+function saveDeviceList() {
+  try {
+    localStorage.setItem(DEVICE_KEY, JSON.stringify({
+      version: 2,
+      activeId: activeDeviceId,
+      items: deviceList
+    }));
+  } catch (e) {
+    console.warn('[device] 配置保存失败：' + (e && e.message));
+  }
+}
+
+/** 启动时读取设备列表（含旧配置迁移） */
+function loadDeviceList() {
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(DEVICE_KEY) || 'null'); } catch (e) { raw = null; }
+  const items = (raw && Array.isArray(raw.items))
+    ? raw.items.filter(d => d && typeof d.id === 'string' && d.id)
+    : [];
+  deviceList = items.map(d => makeDevice(d.name, d));
+
+  if (!deviceList.length) {
+    // 首次运行：把旧的单设备配置迁移进来
+    let legacy = null;
+    try { legacy = JSON.parse(localStorage.getItem(DEVICE_KEY_LEGACY) || 'null'); } catch (e) { legacy = null; }
+    deviceList = [makeDevice('默认设备', legacy || {})];
+    try { localStorage.removeItem(DEVICE_KEY_LEGACY); } catch (e) {}
+  }
+
+  activeDeviceId = (raw && raw.activeId && deviceList.some(d => d.id === raw.activeId))
+    ? raw.activeId
+    : deviceList[0].id;
+  editingDeviceId = activeDeviceId;
+  applyActiveDevice();
+  saveDeviceList();
+}
+loadDeviceList();
+
+/* =====================================================================
+ * HTTPS 兼容处理
+ * ---------------------------------------------------------------------
+ * 浏览器禁止 https 页面发起 ws:// 连接（混合内容）。
+ * 因此页面部署到 https 后，自动把当前设备切到 wss，并同步默认端口。
+ * ===================================================================*/
+function ensureSecureTransport() {
+  if (location.protocol !== 'https:') return;
+  const d = getActiveDevice();
+  if (!d || d.useTLS) return;
+  d.useTLS = true;
+  // 8083 是 ws 端口，对应 wss 端口为 8084；用户自定义过端口则不动
+  if (Number(d.port) === 8083) d.port = 8084;
+  applyActiveDevice();
+  saveDeviceList();
+}
+ensureSecureTransport();
+
+/* =====================================================================
+ * MQTT 载荷解码
+ * ---------------------------------------------------------------------
+ * broker 可能把 payload 以不同形态交给客户端：
+ *   字符串 / Buffer / Uint8Array / ArrayBuffer / 数字数组
+ * 直接 message.toString() 在二进制形态下会得到 "[object ArrayBuffer]" 这类
+ * 无意义字符串，解析必然失败且毫无提示（表现为一直卡在"检测中"）。
+ * ===================================================================*/
+function decodePayload(message) {
+  if (message == null) return '';
+  if (typeof message === 'string') return message;
+  try {
+    if (typeof message === 'object') {
+      // Node/Buffer 风格
+      if (typeof message.toString === 'function' &&
+          (message.type === 'Buffer' || ArrayBuffer.isView(message) === false && message.constructor &&
+           message.constructor.name === 'Buffer')) {
+        return message.toString('utf8');
+      }
+      // Uint8Array / 其它 TypedArray
+      if (ArrayBuffer.isView(message)) {
+        if (typeof TextDecoder !== 'undefined') {
+          return new TextDecoder('utf-8').decode(
+            new Uint8Array(message.buffer, message.byteOffset, message.byteLength)
+          );
+        }
+        let s = '';
+        for (let i = 0; i < message.length; i++) s += String.fromCharCode(message[i]);
+        return s;
+      }
+      // ArrayBuffer
+      if (message instanceof ArrayBuffer ||
+          (message.constructor && message.constructor.name === 'ArrayBuffer')) {
+        const bytes = new Uint8Array(message);
+        if (typeof TextDecoder !== 'undefined') return new TextDecoder('utf-8').decode(bytes);
+        let s = '';
+        for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+        return s;
+      }
+      // 数字数组
+      if (Array.isArray(message)) {
+        let s = '';
+        for (let i = 0; i < message.length; i++) s += String.fromCharCode(message[i]);
+        return s;
+      }
+      if (typeof message.toString === 'function') return message.toString();
+    }
+  } catch (e) {
+    console.warn('[mqtt] 载荷解码失败：' + e.message);
+  }
+  return String(message);
+}
+
+/* ===================== 数据链路状态 ===================== */
+/* 统计收到的消息条数，用于区分"数据没到"与"数据到了但解析失败" */
+let mqttMsgCount = 0;
+let lastMsgAt = null;          // 最近一次收到报文的时间
+let currentClientId = '';       // 当前 MQTT 客户端标识
+function noteMqttMessage() {
+  mqttMsgCount++;
+  lastMsgAt = new Date();
+  updateDeviceInfo();
+}
+
+function onMqttMessage(message) {
+  noteMqttMessage();
+  // 收到任何报文都视为"有进展"，重置等待超时 ——
+  // 长时检测（含沉积可超 30 分钟）因此不会被误判为连接超时
+  touchWaiting();
+  const text = decodePayload(message);
+  // 解码结果不合理时给出明确提示，避免"卡在检测中"这类无信息状态
+  if (!text || text.length < 2 || text.charAt(0) === '[') {
+    console.warn('[mqtt] 载荷无法解码为文本，长度=' + text.length +
+      ' 内容前 40 字符=' + text.slice(0, 40));
+    showRawWarn('载荷无法解码为文本（长度 ' + text.length + '）', text);
+    return;
+  }
+  const full = combineFrame(text);
+  if (full === null) return; // 片段已缓存，等待后续消息
+  lastRawPayload = full;
+  parseData(full);
+}
+
+/** 显示"已收到但解析失败"的提示条（含原始内容前 160 字符） */
+function showRawWarn(reason, raw) {
+  const box = $('rawWarn');
+  const txt = $('rawWarnText');
+  if (!box || !txt) return;
+  txt.textContent = reason + ' ｜ 原始内容：' +
+    String(raw == null ? '' : raw).slice(0, 160) +
+    (String(raw || '').length > 160 ? ' …（共 ' + String(raw).length + ' 字符）' : '');
+  box.classList.remove('hidden');
+}
+function hideRawWarn() {
+  const box = $('rawWarn');
+  if (box) box.classList.add('hidden');
+}
+
+/* =====================================================================
+ * 重金属检测结果数据模型
+ * ---------------------------------------------------------------------
+ *   potential     对应电位（V）—— 溶出峰所在的电位
+ *   peakCurrent   峰值电流（μA）—— 基线校正后的峰高
+ *   concentration 浓度（mg/kg） —— 由标定方程反解得到
+ * 没有标定的金属这三项保持 null，界面显示 "--"。
+ *
+ * 数据流：
+ *   曲线数据 → analyzeHeavyMetals() → 峰识别 / 基线校正 / 方程反解
+ *            → 返回填充后的完整列表 → renderSpeciesInto() 渲染
+ * ===================================================================*/
+const HEAVY_METAL_SPECIES = [
+  { species: '镉', symbol: 'Cd' },
+  { species: '铅', symbol: 'Pb' },
+  { species: '铋', symbol: 'Bi' },
+  { species: '砷', symbol: 'As' },
+  { species: '锌', symbol: 'Zn' }
+];
+
+/* =====================================================================
+ * 重金属峰位参考
+ * ---------------------------------------------------------------------
+ * peakV      该金属溶出峰的"正常电位"（V）
+ * tolerance  允许偏差（V）—— 只有落在这个范围内的峰才可能被认领
+ * 峰识别先在整条曲线上找出所有真实的峰（见 findPeaks），
+ * 再按电位把峰指派给金属，所以这张表只用于"归属判断"，
+ * 不再用于"窗口内取最大值"。
+ * ===================================================================*/
+const PEAK_REFERENCE = {
+  Cd: { peakV: -0.82, tolerance: 0.10 },
+  Pb: { peakV: -0.56, tolerance: 0.10 },
+  Bi: { peakV: -0.30, tolerance: 0.10 },
+  As: { peakV:  0.00, tolerance: 0.10 },
+  Zn: { peakV: -1.00, tolerance: 0.10 }
+};
+
+/* =====================================================================
+ * 峰识别参数
+ * ---------------------------------------------------------------------
+ * smoothWindow   平滑窗口（点数）。1 = 不平滑，3 = 三点滑动平均。
+ *                轻平滑可压制采样毛刺，避免把噪点当成峰。
+ * minProminence  最小峰突出度（μA）。低于此值不认作峰。
+ *                突出度 = 峰顶电流 − 左右两侧"回到峰高之前"的最低点中较高者，
+ *                也就是这个峰相对周围地形的"独立高度"。
+ * minSeparation  两个峰之间的最小电位间隔（V）。更近的弱峰会被并入强峰，
+ *                避免同一个峰被检出两次。
+ * ===================================================================*/
+const PEAK_DETECT = {
+  smoothWindow: 3,
+  minProminence: 0.005,
+  minSeparation: 0.03
+};
+
+/* =====================================================================
+ * 标准曲线标定（线性拟合）
+ * ---------------------------------------------------------------------
+ * 溶出峰电流与浓度的关系按线性标准曲线换算：
+ *
+ *      I_peak = k · C + b        →        C = (I_peak − b) / k
+ *
+ *   I_peak 峰位处的**绝对电流值**（μA）—— 与曲线纵坐标、数据统计里的
+ *          「峰值电流」是同一个量，可直接核对
+ *   C      浓度（mg/kg）
+ *   k      标准曲线斜率，即灵敏度 μA/(mg/kg)
+ *   b      标准曲线截距 = 零浓度时的峰电流（≈ 基线电平 μA）
+ *
+ * ★★★ 下面 5 组 k、b 全部是**示例值**，仅用于跑通流程 ★★★
+ *     数字本身没有计量意义，正式使用前必须替换为实测标定结果：
+ *       1) 用一组已知浓度的标准液各测一条曲线（例如 0.1 / 0.5 / 1 / 2 mg/kg）
+ *       2) 读出每条曲线在该金属峰位的绝对电流 I_peak
+ *       3) 以 I_peak 对 C 做线性拟合，得到斜率 k 与截距 b，填回下表
+ *     表格下方会按本表自动显示当前使用的方程，便于核对。
+ * ===================================================================*/
+const CALIBRATION = {
+  Cd: { k: 0.20, b: 0.15 },
+  Pb: { k: 0.26, b: 0.15 },
+  Bi: { k: 0.18, b: 0.15 },
+  As: { k: 0.24, b: 0.15 },
+  Zn: { k: 0.31, b: 0.15 }
+};
+let speciesRows = HEAVY_METAL_SPECIES.map(it => ({
+  species: it.species,
+  symbol: it.symbol,
+  potential: null,
+  peakCurrent: null,
+  concentration: null
+}));
+
+/**
+ * 重金属定量分析。
+ * @param {number[]} currents 差值段的电流值（μA），顺序对应扫描电位递增
+ * @param {object}   scan     { start, end, step } 扫描参数（V）
+ * @param {Array}    rows     结果行（会被就地填充并返回）
+ * @returns {{ok: boolean, species: Array}}
+ *
+ * 流程：
+ *   1) 按扫描参数算出每一点的电位
+ *   2) 取该金属"正常电位"附近作为搜索窗口
+ *   3) 窗口内找电流最大的点，再对相邻三点做抛物线拟合
+ *      → 得到亚采样的峰位与峰电流（两者取同一个顶点）
+ *   4) 有标定的金属，由 C = (I_peak − b) / k 反解浓度
+ */
+/**
+ * 在曲线上识别所有真实的峰。
+ * @param {number[]} volts    逐点电位（V）
+ * @param {number[]} currents 逐点电流（μA）
+ * @returns {Array<{index:number, potential:number, current:number, prominence:number}>}
+ *
+ * 判据：
+ *   1) 局部极大（左右都不高于它，且不是全平段）
+ *   2) 突出度 ≥ PEAK_DETECT.minProminence
+ *   3) 与已保留的峰相距 ≥ minSeparation，太近的弱峰并入强峰
+ * 峰位与峰电流在**原始数据**上做三点抛物线细化，取同一个顶点。
+ */
+function findPeaks(volts, currents) {
+  const o = PEAK_DETECT;
+  const n = currents.length;
+  if (!n || n < 5) return [];
+
+  // 轻平滑（居中滑动平均），用于"找峰"，不用于读数
+  const w = Math.max(1, Math.round(o.smoothWindow || 1));
+  let y = currents;
+  if (w > 1) {
+    const half = Math.floor(w / 2);
+    y = currents.map(function (_, i) {
+      let sum = 0, cnt = 0;
+      for (let k = -half; k <= half; k++) {
+        const idx = i + k;
+        if (idx >= 0 && idx < n) { sum += currents[idx]; cnt++; }
+      }
+      return sum / cnt;
+    });
+  }
+
+  const step = n > 1 ? Math.abs(volts[1] - volts[0]) : 0;
+  const found = [];
+
+  for (let i = 1; i < n - 1; i++) {
+    const v = y[i];
+    // 局部极大；要求至少一侧严格更低，避免把平坦段全部当成峰
+    if (!(v >= y[i - 1] && v >= y[i + 1])) continue;
+    if (!(v > y[i - 1] || v > y[i + 1])) continue;
+
+    // 突出度：向两侧走到比峰更高的点为止，记录两侧最低点
+    let leftMin = v, rightMin = v;
+    for (let j = i - 1; j >= 0; j--) {
+      if (y[j] > v) break;
+      if (y[j] < leftMin) leftMin = y[j];
+    }
+    for (let j = i + 1; j < n; j++) {
+      if (y[j] > v) break;
+      if (y[j] < rightMin) rightMin = y[j];
+    }
+    const prominence = v - Math.max(leftMin, rightMin);
+    if (!(prominence >= o.minProminence)) continue;
+
+    // 三点抛物线细化（用原始数据）
+    const y0 = currents[i - 1];
+    const y1 = currents[i];
+    const y2 = currents[i + 1];
+    const denom = y0 - 2 * y1 + y2;
+    let dV = 0;
+    let apexI = y1;
+    if (denom !== 0) {
+      const delta = 0.5 * (y0 - y2) / denom;   // 单位：采样点
+      if (Math.abs(delta) <= 1) {
+        dV = delta * step;
+        apexI = y1 - 0.25 * (y0 - y2) * delta;
+      }
+    }
+
+    found.push({
+      index: i,
+      potential: volts[i] + dV,
+      current: apexI,
+      prominence: prominence
+    });
+  }
+
+  // 太近的峰合并：保留突出度更大的那个
+  found.sort(function (a, b) { return b.prominence - a.prominence; });
+  const kept = [];
+  found.forEach(function (pk) {
+    const tooClose = kept.some(function (k) {
+      return Math.abs(k.potential - pk.potential) < o.minSeparation;
+    });
+    if (!tooClose) kept.push(pk);
+  });
+  return kept;
+}
+
+/**
+ * 重金属定量分析。
+ * @param {number[]} currents 差值段的电流值（μA），顺序对应扫描电位递增
+ * @param {object}   scan     { start, end, step } 扫描参数（V）
+ * @param {Array}    rows     结果行（会被就地填充并返回）
+ *
+ * 流程：
+ *   1) 按扫描参数算出每一点电位
+ *   2) findPeaks() 在整条曲线上识别所有真实的峰（局部极大 + 突出度）
+ *   3) 峰 → 金属：按突出度从强到弱，每个峰认领"电位最接近、尚未被认领"的金属
+ *   4) 有标定的金属，由 C = (I − b) / k 反解浓度
+ */
+function analyzeHeavyMetals(currents, scan, rows) {
+  const list = (rows && rows.length) ? rows : blankSpeciesRows();
+
+  // 先清空，避免上一轮的结果残留
+  list.forEach(function (r) {
+    r.potential = null;
+    r.peakCurrent = null;
+    r.concentration = null;
+  });
+
+  if (!currents || currents.length < 5 || !scan || !(scan.step > 0)) {
+    return { ok: false, species: list };
+  }
+
+  // 逐点电位（与绘图保持同一套换算约定）
+  const volts = currents.map(function (_, i) {
+    return PROTOCOL.sampleFirstPoint
+      ? scan.start + i * scan.step
+      : scan.start + (i + 1) * scan.step;
+  });
+
+  // 1) 识别所有峰
+  const peaks = findPeaks(volts, currents);
+  if (!peaks.length) return { ok: true, species: list };
+
+  // 2) 峰 → 金属：强峰先选，避免弱噪声抢走某台金属的归属
+  const claimed = {};                 // symbol -> peak
+  peaks.forEach(function (pk) {
+    let best = null;
+    let bestDist = Infinity;
+    list.forEach(function (row) {
+      if (claimed[row.symbol]) return;
+      const ref = PEAK_REFERENCE[row.symbol];
+      if (!ref) return;
+      const dist = Math.abs(pk.potential - ref.peakV);
+      if (dist <= ref.tolerance && dist < bestDist) {
+        best = row;
+        bestDist = dist;
+      }
+    });
+    if (best) claimed[best.symbol] = pk;
+  });
+
+  // 3) 填结果
+  list.forEach(function (row) {
+    const pk = claimed[row.symbol];
+    if (!pk) return;                        // 该金属没有对应的峰 → 保持 --
+    row.potential = pk.potential.toFixed(3);
+    row.peakCurrent = pk.current.toFixed(3);
+
+    const cal = CALIBRATION[row.symbol];
+    if (!cal || !(cal.k > 0)) return;       // 未标定 → 浓度留 --
+    const conc = (pk.current - cal.b) / cal.k;
+    row.concentration = (isFinite(conc) && conc > 0) ? conc.toFixed(2) : '未检出';
+  });
+
+  return { ok: true, species: list };
+}
+
+/** 生成一份空白结果行（所有测量值为 null，表格显示 --） */
+function blankSpeciesRows() {
+  return HEAVY_METAL_SPECIES.map(it => ({
+    species: it.species,
+    symbol: it.symbol,
+    potential: null,
+    peakCurrent: null,
+    concentration: null
+  }));
+}
+
+/** 把结果行渲染到指定 tbody（所有测量值来自处理函数，界面只读） */
+function renderSpeciesInto(tbodyId, rows) {
+  const body = $(tbodyId);
+  if (!body) return;
+  const list = (rows && rows.length) ? rows : blankSpeciesRows();
+  const cell = v => (v === null || v === undefined ? '--' : escapeHtml(v));
+  // 浓度列三种状态：有值（强调色）/ 未检出（灰）/ 无标定（--）
+  const concCls = v => (v === null || v === undefined)
+    ? ' empty'
+    : (v === '未检出' ? ' muted' : '');
+  // 检出统计：有浓度值（非 null 且非"未检出"）的行
+  const hits = list.filter(r => r.concentration !== null &&
+    r.concentration !== undefined && r.concentration !== '未检出').length;
+  const badge = $('hmHitBadge');
+  if (badge && tbodyId === 'hmBody') {
+    badge.textContent = list.length ? ('检出 ' + hits + ' / ' + list.length) : '未开始';
+    badge.classList.toggle('on', hits > 0);
+  }
+
+  body.innerHTML = list.map(row => `
+    <tr class="${(row.concentration !== null && row.concentration !== undefined &&
+                   row.concentration !== '未检出') ? 'hit' : ''}">
+      <td class="metal">${escapeHtml(row.species)}</td>
+      <td class="num${row.potential === null ? ' empty' : ''}">${cell(row.potential)}</td>
+      <td class="num${concCls(row.concentration)}">${cell(row.concentration)}</td>
+      <td class="num${row.peakCurrent === null ? ' empty' : ''}">${cell(row.peakCurrent)}</td>
+    </tr>`).join('');
+}
+
+/** 渲染实时检测的重金属结果 */
+/** 刷新检测页顶部的结果摘要条 */
+function renderRunStrip() {
+  const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+  const dev = getActiveDevice();
+  set('runDevice', dev ? dev.name : '--');
+  set('runRange', (scan && scan.start != null && scan.end != null)
+    ? scan.start + ' ~ ' + scan.end + ' V' : '--');
+  set('runPoints', lastCurveRaw.length ? String(lastCurveRaw.length) : '--');
+  set('runDeposit', (activeDepositS != null && Number(activeDepositS) > 0)
+    ? Number(activeDepositS) + ' s' : '--');
+}
+
+function renderSpeciesTable() {
+  renderSpeciesInto('hmBody', speciesRows);
+}
+
+/** 某条历史记录的重金属结果：用它自己的曲线数据重新跑一遍处理函数 */
+function speciesRowsOfHistory(item) {
+  const rows = blankSpeciesRows();
+  if (!item || !item.data || !item.data.length) return rows;
+  const nums = item.data.map(currentFromRaw);
+  const scanObj = {
+    start: item.startVolt,
+    end: item.endVolt,
+    step: item.stepVolt,
+    sensitivityK: null
+  };
+  const res = analyzeHeavyMetals(nums, scanObj, rows);
+  return (res && res.ok && res.species && res.species.length) ? res.species : rows;
+}
+
+/** 历史页：只有"单看一条曲线"时才显示重金属结果表；
+ *  勾选多条做对比时隐藏 —— 结果只对应某一条记录，混在一起会误导。 */
+function renderHistorySpecies(item) {
+  const card = $('hisSpeciesCard');
+  if (card) card.classList.toggle('hidden', !item);
+  if (!item) return;
+  renderSpeciesInto('hmBodyHis', speciesRowsOfHistory(item));
+}
+
+/** 运行处理函数，把结果填入表格（传入的是原始值，先换算成 μA） */
+function runHeavyMetalAnalysis(rawNums, scan) {
+  if (!rawNums || !rawNums.length || !scan) return;
+  const currents = rawNums.map(currentFromRaw);
+  const result = analyzeHeavyMetals(currents, scan, speciesRows);
+  if (result && result.species) speciesRows = result.species;
+  renderSpeciesTable();
+}
+
+/* =====================================================================
+ * 设备分段协议（检测模式）
+ * ---------------------------------------------------------------------
+ * 回传形如：
+ *   @BS0* @BS1* @DOF ^1504*^1504*... @DOR ^1504*... @DD ^0*^0*... &
+ *   └─ 包头 ─┘  └── 正向扫描 ──┘     └─ 反向扫描 ─┘   └─ 差值 ─┘
+ *   - @DOF 之后：正向扫描数据
+ *   - @DOR 之后：反向扫描数据
+ *   - @DD  之后：两次扫描的差值 —— **曲线只绘制这一段**
+ * 包头（@BS0* / @BS1*）结构尚不确定，解析只依赖三个数据标记。
+ * ===================================================================*/
+const MARK_FORWARD = '@DOF';
+const MARK_REVERSE = '@DOR';
+const MARK_DIFF = '@DD';
+
+/** 取某标记之后、到下一个标记（或帧尾 &）之间的 ^数值* 序列 */
+function numbersBetween(body, startMark, endMarks) {
+  const at = body.indexOf(startMark);
+  if (at < 0) return null;
+  let from = at + startMark.length;
+  let to = body.length;
+  endMarks.forEach(mk => {
+    const p = body.indexOf(mk, from);
+    if (p >= 0 && p < to) to = p;
+  });
+  const amp = body.indexOf('&', from);
+  if (amp >= 0 && amp < to) to = amp;
+  const nums = [];
+  const re = /\^([+-]?\d+(?:\.\d+)?)\*/g;
+  let m;
+  while ((m = re.exec(body.slice(from, to))) !== null) nums.push(Number(m[1]));
+  return nums;
+}
+
+/**
+ * 解析设备回传，返回三段数据。
+ * @returns {{forward:number[]|null, reverse:number[]|null, diff:number[],
+ *            hasTerminator:boolean, source:'diff'|'fallback'|'empty'}}
+ *          source 说明数据来源，供页面如实反馈解析情况
+ */
+function parseDeviceFrame(raw) {
+  const body = String(raw == null ? '' : raw);
+  const hasTerminator = body.indexOf('&') >= 0;
+  const forward = numbersBetween(body, MARK_FORWARD, [MARK_REVERSE, MARK_DIFF]);
+  const reverse = numbersBetween(body, MARK_REVERSE, [MARK_DIFF]);
+  const diff = numbersBetween(body, MARK_DIFF, []);
+  if (diff && diff.length) return { forward, reverse, diff, hasTerminator, source: 'diff' };
+  // 回退：没有有效 @DD 段时（旧格式/清洁模式/帧不完整）按整帧提取数值
+  const nums = extractNumbers(body);
+  return {
+    forward,
+    reverse,
+    diff: nums,
+    hasTerminator,
+    source: nums.length ? 'fallback' : 'empty'
+  };
+}
+
+/** 数值序列是否全为 0（用于区分"差值确实为 0"与"没收到数据"） */
+function isAllZero(nums) {
+  if (!nums || !nums.length) return false;
+  for (let i = 0; i < nums.length; i++) {
+    if (nums[i] !== 0) return false;
+  }
+  return true;
+}
+
+/* ---------------------------------------------------------------------
+ * 跨消息拼帧
+ * ---------------------------------------------------------------------
+ * 设备可能把 @DOF / @DOR / @DD 三段**分成多条 MQTT 消息**发送。
+ * 若单条消息里没有 @DD，就不能当作结果（否则会把正向扫描数据误当差值画出来）。
+ * 这里把不含 @DD 的片段缓存下来，等 @DD 到达时拼成完整帧再解析。
+ */
+const frameBuffer = { text: '', timer: null, forward: false, reverse: false };
+/**
+ * 拼帧等待窗口（毫秒）：收到 @DOF/@DOR 片段后，最多再等多久 @DD 段。
+ * 这是"同一次回传内相邻片段之间的间隔"，不是整轮检测时长，
+ * 与 30 分钟级的检测时间无关。4G 下片段间可能有数秒抖动，故给到 8 秒。
+ */
+const FRAME_BUFFER_MS = 8000;
+
+function resetFrameBuffer() {
+  frameBuffer.text = '';
+  frameBuffer.forward = false;
+  frameBuffer.reverse = false;
+  if (frameBuffer.timer) {
+    clearTimeout(frameBuffer.timer);
+    frameBuffer.timer = null;
+  }
+}
+
+/**
+ * 处理一条 MQTT 消息，必要时与缓存片段拼接。
+ * @returns {string|null} 可交给解析器的完整帧；null 表示已缓存、等待后续片段
+ */
+function combineFrame(raw) {
+  const text = String(raw == null ? '' : raw);
+  // 排障开关：关闭拼帧时，一律按单帧解析（用于对比拼帧逻辑的影响）
+  if (!MQTT_CONFIG.combineFrameEnabled) return text;
+
+  const hasDiff = text.indexOf(MARK_DIFF) >= 0;
+  const hasScanMark = text.indexOf(MARK_FORWARD) >= 0 || text.indexOf(MARK_REVERSE) >= 0;
+
+  if (hasDiff) {
+    // 拿到差值段：与之前缓存的正向/反向片段拼起来
+    const full = frameBuffer.text ? frameBuffer.text + text : text;
+    resetFrameBuffer();
+    return full;
+  }
+
+  if (hasScanMark) {
+    // 分段回传：记录已到达的段落，累积缓存，等 @DD 到达后再整帧解析
+    if (text.indexOf(MARK_FORWARD) >= 0) frameBuffer.forward = true;
+    if (text.indexOf(MARK_REVERSE) >= 0) frameBuffer.reverse = true;
+    frameBuffer.text += text;
+
+    if (frameBuffer.timer) clearTimeout(frameBuffer.timer);
+    frameBuffer.timer = setTimeout(() => {
+      // 超时仍不完整：只提示、不生造半截帧。
+      // 关键：绝不把"只有 @DOF、没有 @DD"的片段当作单帧送去解析 ——
+      // 那样会解析失败并顺带关掉"检测中"弹窗，表现为长时检测被误判结束。
+      const pending = frameBuffer.text;
+      const missing = [];
+      if (!frameBuffer.forward) missing.push(MARK_FORWARD);
+      if (!frameBuffer.reverse) missing.push(MARK_REVERSE);
+      missing.push(MARK_DIFF);
+      resetFrameBuffer();
+      if (pending) {
+        showRawWarn('回传不完整：等待 ' + missing.join(' / ') + ' 超时，已丢弃 ' +
+          pending.length + ' 字符的片段', pending);
+      }
+    }, FRAME_BUFFER_MS);
+    return null;
+  }
+
+  // 没有分段标记：按单帧处理（旧格式 / 清洁模式）
+  return text;
+}
+
+const HISTORY_KEY = 'swv_history';
+const HISTORY_VERSION = 2;
+// 历史记录保留条数。
+// 注意：localStorage 单域名通常上限 5MB；单条约 320 点×约 6 字符 ≈ 2KB，
+// 100 条约 200KB，余量充足。若单轮点数上万（如 1 万点），100 条会接近上限，
+// 届时写入失败会自动降级为只保留最近 5 条（见 writeHistory）。
+const HISTORY_MAX = 100;
+
+const REQUIRED_LIBS = [
+  { name: 'ECharts', ok: () => typeof echarts !== 'undefined' },
+  { name: 'MQTT.js', ok: () => typeof mqtt !== 'undefined' }
+];
+function checkLibs() {
+  const missing = REQUIRED_LIBS.filter(l => !l.ok()).map(l => l.name);
+  if (missing.length) showTip('依赖加载失败', `无法加载 ${missing.join('、')}，请检查网络后刷新页面。`);
+  return missing.length === 0;
+}
+
+/* ===================== 运行状态 ===================== */
+let client = null;
+let chart = null;
+let historyChart = null;
+let currentTask = '';
+let scan = { start: -1.2, end: 0.2, step: 0.005, sensitivityK: 10 };
+let waitingTimer = null;
+let lastSavedLabel = '';
+// 最近一次收到的原始回传，用于"解析失败"提示
+let lastRawPayload = '';
+// 历史列表当前选中的记录 id（用于高亮）
+let selectedHistoryId = null;
+// 历史对比：勾选的记录 id 列表（按勾选顺序，最多 COMPARE_MAX 条）
+let compareIds = [];
+let chartObserver = null;
+let historyObserver = null;
+// 检测完成后自动返回首页的定时器（null = 无待执行任务）
+let autoReturnTimer = null;
+// 本轮任务使用的沉积时间（s），随历史记录一起保存，便于回看
+let activeDepositS = null;
+// 最近一次绘制的曲线（原始值 + 对应电位），供导出使用
+let lastCurveRaw = [];
+let lastCurveVolts = [];
+// 历史记录的设备筛选：'' = 全部，'__none__' = 未记录设备的旧数据，其余为 deviceId
+let historyDeviceFilter = '';
+// 上次进入历史页时列表最新一条的 id（用于判断是否产生了新记录）
+let historyTopId = null;
+
+/* 对比曲线配色：最多同时对比 6 条，颜色区分明显 */
+const COMPARE_MAX = 6;
+const COMPARE_PALETTE = [
+  { hex: '#2563eb', fill: 'rgba(37,99,235,' },   // 蓝
+  { hex: '#0b7a5a', fill: 'rgba(11,122,90,' },   // 绿
+  { hex: '#b54708', fill: 'rgba(181,71,8,' },    // 橙
+  { hex: '#7c3aed', fill: 'rgba(124,58,237,' },  // 紫
+  { hex: '#d92d20', fill: 'rgba(217,45,32,' },   // 红
+  { hex: '#0891b2', fill: 'rgba(8,145,178,' }    // 青
+];
+
+function $(id) { return document.getElementById(id); }
+
+/* =====================================================================
+ * 检测完成后自动返回首页（当前默认关闭）
+ * ---------------------------------------------------------------------
+ * 由 PROTOCOL.autoReturnHomeMs 控制：
+ *   0      关闭 —— 检测完成后停在结果页（当前默认）
+ *   2000   曲线画出后停 2 秒，然后自动跳回首页
+ *
+ * 关闭时这段逻辑不产生任何副作用（scheduleAutoReturn 直接返回），
+ * 保留代码是为了以后想恢复时只改一个数字即可。
+ *
+ * 多条回传帧（分片）到达时会**重置**计时，不会在第一帧就跳走。
+ * 手动切换页面或开始新任务会取消这个待执行动作。
+ * ===================================================================*/
+function cancelAutoReturn() {
+  if (autoReturnTimer) {
+    clearTimeout(autoReturnTimer);
+    autoReturnTimer = null;
+  }
+}
+
+function scheduleAutoReturn() {
+  const ms = Number(PROTOCOL.autoReturnHomeMs) || 0;
+  cancelAutoReturn();          // 重置：后续分片帧会重新计时
+  if (ms <= 0) return;
+
+
+  autoReturnTimer = setTimeout(function () {
+    autoReturnTimer = null;
+    showHome();
+    setActiveNav('navHome');
+  }, ms);
+}
+
+/* =====================================================================
+ * 顶栏标题 / 提示 / "主界面"按钮显隐
+ * ---------------------------------------------------------------------
+ * 三个页面切换函数统一调用，保证任何页面都能看到一致的状态，
+ * 并且"主界面"按钮只在非首页时出现。
+ * ===================================================================*/
+function setPageHeader(title) {
+  const t = $('pageTitle');
+  if (t) t.textContent = title;
+}
+
+/** 首页时隐藏"主界面"按钮（已经在首页了，没必要显示） */
+function syncHomeBtn(isHome) {
+  const btn = $('btnHome');
+  if (!btn) return;
+  if (isHome) btn.classList.add('hidden');
+  else btn.classList.remove('hidden');
+}
+
+/* ===================== 页面切换 ===================== */
+/* =====================================================================
+ * 页面切换的过渡处理
+ * ---------------------------------------------------------------------
+ * 显隐仍由 .hidden 控制（display:none），入场动画由 CSS 负责：
+ * 元素从 display:none 变为可见时，animation 会自动重放一次。
+ * 这里只做一件 CSS 做不到的事 —— 真正换页时把滚动位置归零，
+ * 避免从长页面切到另一页时停在半中间（像平台页签切换那样）。
+ *
+ * 注意：showDetectPage() 会在每帧数据到达时被调用，
+ * 所以必须判断"原本是否隐藏"，只有真切换时才滚动。
+ * ===================================================================*/
+function resetScrollIfSwitching(pageId) {
+  const el = $(pageId);
+  if (el && el.classList.contains('hidden')) {
+    try { window.scrollTo(0, 0); } catch (e) {}
+  }
+}
+
+function showHome() {
+  resetScrollIfSwitching('homePage');
+  try { renderHomeOverview(); } catch (e) { console.warn('[home] 概览刷新失败：' + e.message); }
+  $('homePage').classList.remove('hidden');
+  $('detectPage').classList.add('hidden');
+  $('historyPage').classList.add('hidden');
+  $('devicePage').classList.add('hidden');
+  $('paramPage').classList.add('hidden');
+  setPageHeader('主界面');
+  syncHomeBtn(true);
+}
+function showDetectPage() {
+  resetScrollIfSwitching('detectPage');
+  $('homePage').classList.add('hidden');
+  $('detectPage').classList.remove('hidden');
+  $('historyPage').classList.add('hidden');
+  $('devicePage').classList.add('hidden');
+  $('paramPage').classList.add('hidden');
+  setPageHeader('检测任务');
+  syncHomeBtn(false);
+  try { renderRunStrip(); } catch (e) { /* 摘要条缺失不影响主流程 */ }
+  if (!chart) initChart();
+  resizeSoon(chart);
+}
+function showHistoryPage() {
+  resetScrollIfSwitching('historyPage');
+  $('homePage').classList.add('hidden');
+  $('detectPage').classList.add('hidden');
+  $('historyPage').classList.remove('hidden');
+  $('devicePage').classList.add('hidden');
+  $('paramPage').classList.add('hidden');
+  setPageHeader('历史记录');
+  syncHomeBtn(false);
+  // 图表初始化失败（例如 echarts 未加载）不应阻断下面的列表与读数
+  try {
+    if (!historyChart) initHistoryChart();
+    resizeSoon(historyChart);
+  } catch (e) {
+    console.warn('[history] 图表初始化失败：' + e.message);
+  }
+
+  // 先刷新设备下拉（新记录可能带来新设备），再按当前筛选取记录
+  renderHistoryDeviceOptions();
+  const list = getFilteredHistory();
+  if (list.length) {
+    // 过滤已被删除 / 被筛掉的选择
+    compareIds = compareIds.filter(id => list.some(i => i.id === id));
+    /* 首次进入、或期间产生了新记录 → 默认看最新一条；
+     * 没有新记录时保留上次的选择，来回切页不会丢掉对比组合。 */
+    const topId = list[0].id;
+    if (!compareIds.length || String(topId) !== String(historyTopId)) {
+      compareIds = [topId];
+    }
+    historyTopId = topId;
+    selectedHistoryId = compareIds[compareIds.length - 1];
+    renderHistoryChart();
+  } else {
+    compareIds = [];
+    selectedHistoryId = null;
+    historyTopId = null;
+    resetHistoryStats();
+  }
+  renderHistoryList();
+  // 沉积时间与图表无关，单独同步一次，图表不可用时也能正确显示
+  syncHistoryDeposit();
+}
+
+/** 按当前选择同步"沉积时间"读数（与图表状态无关） */
+function syncHistoryDeposit() {
+  const list = getHistoryList();
+  const ids = compareIds.filter(id => list.some(it => it.id === id));
+  const item = (ids.length === 1) ? list.find(it => it.id === ids[0]) : null;
+  renderHistoryDeposit(item || null);
+  renderHistoryDevice(item || null);
+}
+
+/** 历史曲线左上角的来源设备（item 为 null 时隐藏） */
+function renderHistoryDevice(item) {
+  const box = $('hisDeviceReadout');
+  const val = $('hisDeviceName');
+  if (box) box.classList.toggle('hidden', !item);
+  if (!val) return;
+  val.textContent = (item && item.deviceName) ? item.deviceName : '--';
+}
+// 从任意页面返回首页都不再清空实时曲线（清空只由"清空曲线"按钮触发）
+function backToHome() {
+  cancelAutoReturn();
+  // 参数弹窗只是表单，未提交时关掉；否则会挡住首页。
+  // 注意：不关"检测中"弹窗 —— 那表示任务正在跑，关掉会丢掉进度提示。
+  try { closeParamPage(); } catch (e) {}
+  // 未确认的发送动作一并放弃，避免切页后又被弹出来
+  cancelConfirm();
+  showHome();
+  setActiveNav('navHome');   // 侧边栏高亮回到"主界面"
+}
+
+function resizeSoon(instance) {
+  if (!instance) return;
+  // 容器从 hidden 变为可见后，尺寸要等一帧才能拿到。
+  // 注意：必须对 requestAnimationFrame 不存在的情况做回退 ——
+  // 一旦这里抛错，会中断调用方（parseData → showDetectPage）的后续流程，
+  // 导致 drawCurve 永远执行不到，表现为"有坐标轴、没有曲线"。
+  const run = () => { try { instance.resize(); } catch (e) {} };
+  try {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(run);
+    } else {
+      setTimeout(run, 16);
+    }
+  } catch (e) {
+    setTimeout(run, 16);
+  }
+}
+
+/* ===================== 模式选择 ===================== */
+function selectMode(task) {
+  // 参数设置改为独立页面（原弹窗方式已废弃）
+  return showParamPage(task);
+}
+
+function closeTipModal() { $('tipModal').classList.add('hidden'); }
+function showTip(title, text) {
+  $('tipTitle').textContent = title;
+  $('tipText').textContent = text;
+  $('tipModal').classList.remove('hidden');
+}
+
+/* =====================================================================
+ * 发送前确认
+ * ---------------------------------------------------------------------
+ * 每次向设备下发数据（检测任务 / 清洁任务）之前，
+ * 先弹一个纯确认框，点「确定」才真正发出。
+ *
+ * 弹窗只有标题和两个按钮，不显示内容、不带说明文字。
+ * 用自定义弹窗而不是原生 confirm()，原因：
+ *   1. 风格与界面一致
+ *   2. 原生 confirm 在某些环境会有"不再提示"选项，勾选后就再也不确认了
+ * ===================================================================*/
+let confirmCallback = null;
+
+/**
+ * 弹出确认框。
+ * @param {function} onOk 点「确定」时执行
+ */
+function askConfirm(onOk) {
+  confirmCallback = (typeof onOk === 'function') ? onOk : null;
+  $('confirmModal').classList.remove('hidden');
+}
+
+/** 关闭确认框；ok = true 时执行回调（即真正发送） */
+function closeConfirm(ok) {
+  const cb = confirmCallback;
+  confirmCallback = null;
+  $('confirmModal').classList.add('hidden');
+  if (ok && cb) {
+    try { cb(); } catch (e) { console.warn('[confirm] 发送失败：' + e.message); }
+  }
+}
+
+/** 放弃待确认动作（切页面时用），不执行回调 */
+function cancelConfirm() {
+  confirmCallback = null;
+  const el = $('confirmModal');
+  if (el) el.classList.add('hidden');
+}
+
+/* ===================== 启动 / 取消任务 ===================== */
+function currentParams() {
+  const num = id => Number($(id).value);
+  return {
+    startMv: Math.round(num('m_p1') * PROTOCOL.voltScale),
+    endMv: Math.round(num('m_p2') * PROTOCOL.voltScale),
+    depositMv: Math.round(num('m_p3') * PROTOCOL.voltScale),
+    depositS: Math.round(num('m_p4')),
+    stepMv: Math.round(num('m_p5') * PROTOCOL.voltScale),
+    pulseMv: Math.round(num('m_p6') * PROTOCOL.voltScale),
+    sampleHz: Math.round(num('m_p7')),
+    sensitivityK: num('m_p8')
+  };
+}
+
+function startTask() {
+  cancelAutoReturn();          // 新一轮任务开始，取消上一轮的自动返回
+  if (!currentTask) { closeParamPage(); return; }
+  const p = currentParams();
+  if (!(p.stepMv > 0)) { alert('阶跃幅度必须大于 0'); return; }
+  if (p.endMv === p.startMv) { alert('起始电位与终止电位不能相同'); return; }
+
+  // 本地绘图用的扫描范围与步长（与是否下发参数无关）
+  scan = {
+    start: p.startMv / PROTOCOL.voltScale,
+    end: p.endMv / PROTOCOL.voltScale,
+    step: p.stepMv / PROTOCOL.voltScale,
+    sensitivityK: p.sensitivityK
+  };
+
+  const cfg = PROTOCOL.task[currentTask];
+  let frame = cfg.head;
+  // 只有带参数的任务（检测）才拼参数段；清洁是单条 @M5@W
+  if (cfg.withParams !== false) {
+    PROTOCOL.paramOrder.forEach(key => {
+      frame += '^' + (Number(p[key]) + PROTOCOL.paramOffset) + '*';
+    });
+  }
+  frame += cfg.tail;
+
+  /* 发送前确认：点「确定」才真正下发。
+   * 参数弹窗保持在底下不关，取消后可以继续改参数。 */
+  askConfirm(function () {
+    $('paramPage').classList.add('hidden');
+    // 曲线右上角显示本次的沉积时间
+    renderDepositTime(p.depositS);
+    // 记下本次沉积时间，保存历史记录时一并写入（清洁任务无参数，置空）
+    activeDepositS = (cfg.withParams === false) ? null : (Number(p.depositS) || null);
+    openWaiting(cfg.label);
+    // 指令帧为纯 ASCII，GBK 与 UTF-8 字节相同，统一走 GBK 通道
+    sendCmdGbk(frame);
+  });
+}
+
+
+/* =====================================================================
+ * 沉积时间显示（曲线右上角）
+ * ---------------------------------------------------------------------
+ * 直接显示参数设置里的"沉积时间 (s)"，随输入实时更新。
+ * ===================================================================*/
+function renderDepositTime(seconds) {
+  const el = $('depositTime');
+  if (!el) return;
+  const v = Number(seconds);
+  el.textContent = Number.isFinite(v) && v > 0 ? v + ' s' : '--';
+}
+
+/** 从参数输入框读取当前沉积时间并刷新显示 */
+function syncDepositTimeFromForm() {
+  const input = $('m_p4');
+  renderDepositTime(input ? input.value : null);
+}
+
+/* =====================================================================
+ * 等待回传（检测中弹窗）
+ * ---------------------------------------------------------------------
+ * 超时是"无进展"超时，不是"总时长"超时：
+ *   - 每收到一条来自设备的报文都会重置计时（touchWaiting）
+ *   - 只有连续 responseTimeoutMs 完全没有报文才判定超时
+ * 因此 30 分钟以上的检测不会被误判 —— 只要设备还在回传就继续等。
+ * ===================================================================*/
+let waitingStartedAt = 0;
+let waitingTick = null;
+// 是否处于"等待回传"状态。
+// 注意：不能直接用 waitingTimer 是否非空来判断 —— 定时器触发后句柄不会自动置空，
+// 此时若收到迟到数据，会重新武装一个已经超时的等待，导致弹窗在检测结束后意外弹出。
+let waitingActive = false;
+
+/** 收到任何设备报文时重置超时计时（无进展超时，不是总时长超时） */
+function touchWaiting() {
+  if (!waitingActive) return;
+  clearTimeout(waitingTimer);
+  waitingTimer = setTimeout(onWaitingTimeout, PROTOCOL.responseTimeoutMs);
+}
+function onWaitingTimeout() {
+  closeWaiting();
+  showTip('未收到设备数据',
+    '已连续 ' + humanDuration(PROTOCOL.responseTimeoutMs) + ' 没有收到任何数据。' +
+    '请检查设备是否在线、4G 是否掉线、订阅主题是否正确，或确认回传帧格式与解析规则一致。');
+}
+function humanDuration(ms) {
+  const min = Math.round(ms / 60000);
+  return min >= 1 ? min + ' 分钟' : Math.round(ms / 1000) + ' 秒';
+}
+/** 等待期间的用时显示，让"还在跑"这件事可见 */
+function renderWaitingElapsed() {
+  const el = $('waitingHint');
+  if (!el || !waitingActive || !waitingStartedAt) return;
+  const sec = Math.floor((Date.now() - waitingStartedAt) / 1000);
+  const mm = String(Math.floor(sec / 60)).padStart(2, '0');
+  const ss = String(sec % 60).padStart(2, '0');
+  el.textContent = '正在执行扫描，请勿断开连接（已等待 ' + mm + ':' + ss + '）';
+}
+
+function openWaiting(_label) {
+  waitingActive = true;
+  waitingStartedAt = Date.now();
+  renderWaitingElapsed();
+  $('waitingModal').classList.remove('hidden');
+  clearTimeout(waitingTimer);
+  waitingTimer = setTimeout(onWaitingTimeout, PROTOCOL.responseTimeoutMs);
+  clearInterval(waitingTick);
+  waitingTick = setInterval(renderWaitingElapsed, 1000);
+}
+function closeWaiting() {
+  waitingActive = false;
+  clearTimeout(waitingTimer);
+  waitingTimer = null;
+  waitingStartedAt = 0;
+  clearInterval(waitingTick);
+  waitingTick = null;
+  $('waitingModal').classList.add('hidden');
+}
+
+function cancelTask() {
+  sendCmdGbk(PROTOCOL.cancelFrame);
+  closeWaiting();
+}
+
+/* ===================== 图表 ===================== */
+/**
+ * 图表基础配置。
+ * @param {string} hex 主色（已解析为 hex，需同时用于线条与面积渐变）
+ * @param {string} fill 面积色基准（rgba 前缀，不含 alpha）
+ */
+function baseOption(hex, fill) {
+  const fillBase = fill || 'rgba(6,122,91,';
+  return {
+    animation: false,
+    // 留白更舒展（顶部留给峰值标注）
+    grid: { left: 62, right: 26, top: 44, bottom: 52 },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(15,23,42,.92)',
+      borderWidth: 0,
+      padding: [9, 13],
+      textStyle: { color: '#f8fafc', fontSize: 12 },
+      extraCssText: 'border-radius:10px; box-shadow:0 10px 30px rgba(15,23,42,.30);',
+      formatter: function (params) {
+        const pt = params[0].value;
+        return '电位　' + Number(pt[0]).toFixed(3) + ' V<br/>电流　' + Number(pt[1]).toFixed(2) + ' μA';
+      }
+    },
+    xAxis: {
+      type: 'value', name: '电位 (V)', nameLocation: 'middle', nameGap: 30,
+      min: 'dataMin', max: 'dataMax',
+      nameTextStyle: { color: '#94a3b8', fontSize: 11.5, fontWeight: 500, padding: [0, 0, 4, 0] },
+      axisLine: { lineStyle: { color: '#e5eaf2' } },
+      axisTick: { lineStyle: { color: '#e5eaf2' } },
+      axisLabel: { color: '#94a3b8', fontSize: 11, margin: 12 },
+      splitLine: { show: false }
+    },
+    yAxis: {
+      type: 'value', name: '电流 (μA)', nameLocation: 'middle', nameGap: 46,
+      scale: true,
+      nameTextStyle: { color: '#94a3b8', fontSize: 11.5, fontWeight: 500, padding: [0, 0, 0, 0] },
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#94a3b8', fontSize: 11, margin: 12 },
+      splitLine: { lineStyle: { color: '#eef2f8', type: [3, 4] } }
+    },
+    series: [{
+      data: [], type: 'line', smooth: true, symbol: 'none',
+      lineStyle: {
+        width: 2.6,
+        cap: 'round',
+        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+          { offset: 0, color: hex },
+          { offset: 1, color: '#4f9dff' }
+        ])
+      },
+      emphasis: { focus: 'series' },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: fillBase + '0.26)' },
+          { offset: 1, color: fillBase + '0.02)' }
+        ])
+      }
+    }]
+  };
+}
+/** 观察容器尺寸变化；环境不支持 ResizeObserver 时静默跳过（不影响图表创建） */
+function observeResize(target, getInstance) {
+  if (typeof ResizeObserver !== 'function') return null;
+  try {
+    const ob = new ResizeObserver(() => {
+      const inst = getInstance();
+      if (inst) { try { inst.resize(); } catch (e) {} }
+    });
+    ob.observe(target);
+    return ob;
+  } catch (e) {
+    return null;
+  }
+}
+/* 图表配色：实时曲线用品牌绿，历史曲线用蓝，两者线条与面积渐变保持一致 */
+const CHART_COLOR_LIVE = { hex: '#2563eb', fill: 'rgba(37,99,235,' };
+const CHART_COLOR_HIST = { hex: '#8b5cf6', fill: 'rgba(139,92,246,' };
+
+function initChart() {
+  chart = echarts.init($('chart'));
+  chart.setOption(baseOption(CHART_COLOR_LIVE.hex, CHART_COLOR_LIVE.fill));
+  // 窗口不缩放时 resize 不会触发，用 ResizeObserver 盯住容器；
+  // 该 API 缺失时不影响图表本身，只是失去自动重绘
+  chartObserver = observeResize($('chart'), () => chart);
+}
+function initHistoryChart() {
+  historyChart = echarts.init($('historyChart'));
+  historyChart.setOption(baseOption(CHART_COLOR_HIST.hex, CHART_COLOR_HIST.fill));
+  historyObserver = observeResize($('historyChart'), () => historyChart);
+}
+
+/* ===================== MQTT ===================== */
+function isConnected() { return !!(client && client.connected); }
+
+function toggleConnect() {
+  if (isConnected() || client) {
+    const old = client;
+    client = null;                 // 先断开引用，避免 end() 回调再改状态
+    try { old.end(true); } catch (e) {}
+    updateConnStatus(false);
+    return;
+  }
+  if (!checkLibs()) return;
+
+  // https 页面不允许 ws://，这里兜底拦截并提示
+  if (location.protocol === 'https:' && !MQTT_CONFIG.useTLS) {
+    showTip('需要使用加密连接', '当前页面通过 HTTPS 打开，请在「设备管理」中勾选「使用加密连接」，端口一般为 8084。');
+    return;
+  }
+
+  const scheme = MQTT_CONFIG.useTLS ? 'wss' : 'ws';
+  const url = `${scheme}://${MQTT_CONFIG.host}:${MQTT_CONFIG.port}/mqtt`;
+  // 公共 broker 上必须用唯一 clientId，否则会与他人互相踢下线
+  const clientId = 'swv-web-' + Math.random().toString(16).slice(2, 10) + '-' + Date.now().toString(36);
+
+  try {
+    client = mqtt.connect(url, {
+      clientId,
+      clean: true,
+      // keepalive 显式给足：检测单轮可能超过 30 分钟，期间链路不能因心跳过紧而掉线
+      keepalive: PROTOCOL.keepaliveSec,
+      // 掉线后自动重连（重连期间会重新订阅）
+      reconnectPeriod: 3000,
+      connectTimeout: 8000
+    });
+  } catch (e) {
+    client = null;
+    showTip('连接失败', String(e && e.message ? e.message : e));
+    return;
+  }
+  const self = client;
+
+  self.on('connect', () => {
+    if (client !== self) return;
+    currentClientId = clientId;
+    updateConnStatus(true);
+    console.log('[mqtt] 已连接，订阅 ' + MQTT_CONFIG.subTopic);
+    self.subscribe(MQTT_CONFIG.subTopic, err => {
+      if (err) showTip('订阅失败', `无法订阅 ${MQTT_CONFIG.subTopic}：${err.message}`);
+    });
+  });
+  self.on('message', (topic, message) => {
+    if (client !== self) return;
+    onMqttMessage(message);
+  });
+  self.on('error', err => {
+    if (client !== self) return;
+    updateConnStatus(false);
+    console.warn('[mqtt] 连接错误：' + (err && err.message));
+  });
+  self.on('close', () => {
+    if (client !== self) return;
+    updateConnStatus(false);
+  });
+}
+
+function updateConnStatus(connected) {
+  const on = !!connected;
+
+  /* 连接控件现在有多处（设备管理页 + 主界面），
+   * 统一按 class 同步，避免只更新到其中一处。 */
+  const each = function (selector, id, fn) {
+    if (document.querySelectorAll) {
+      document.querySelectorAll(selector).forEach(fn);
+    }
+    const el = $(id);          // 兜底：querySelectorAll 不可用或未命中时
+    if (el) fn(el);
+  };
+
+  each('.conn-status', 'connStatus', function (el) {
+    el.classList.toggle('on', on);
+    el.textContent = on ? '已连接' : '未连接';
+  });
+  each('.btn-connect', 'btnConnect', function (el) {
+    el.classList.toggle('on', on);
+    el.textContent = on ? '断开连接' : '连接设备';
+  });
+
+  if (!on) currentClientId = '';
+  updateDeviceInfo();
+}
+
+function sendCmd(cmd) {
+  if (!isConnected()) {
+    showTip('设备未连接', '指令未下发：MQTT 连接已断开。');
+    return false;
+  }
+  client.publish(MQTT_CONFIG.pubTopic, cmd, { qos: 0 });
+  return true;
+}
+
+/* =====================================================================
+ * GBK 编码
+ * ---------------------------------------------------------------------
+ * 为什么需要专门实现：MQTT.js 的 publish 传字符串时按 **UTF-8** 编码，
+ * 想让检测模块收到 GBK 字节，必须自己编码成 Uint8Array 再发。
+ *
+ * 实现方式：
+ *   1. ASCII（0x00~0x7F）直接映射，与 GBK 完全一致 ——
+ *      因此 "@S"、"^123*"、"_" 这类纯 ASCII 内容在 GBK 与 UTF-8 下
+ *      得到的字节**完全相同**，不需要任何转换。
+ *   2. 非 ASCII 字符用浏览器内置的 GBK 解码器反查：
+ *      枚举全部合法 GBK 双字节，解码后建立"字符 → 字节"映射并缓存。
+ *      这样不依赖任何外部码表文件。
+ *   3. 反查不到的字符直接报错，不会静默发错字节。
+ * ===================================================================*/
+const GBK = (function () {
+  let map = null;         // 字符 -> Uint8Array（单字节或双字节）
+  let decoder = null;
+
+  function buildMap() {
+    if (map) return map;
+    map = new Map();
+
+    let dec;
+    try {
+      dec = new TextDecoder('gbk', { fatal: false });
+    } catch (e) {
+      // 极老的浏览器不支持 gbk 解码器
+      map = false;
+      return map;
+    }
+    decoder = dec;
+
+    // 单字节区：0x80 在 GBK 里是欧元符；0x00~0x7F 与 ASCII 相同
+    for (let b = 0x00; b <= 0x7F; b++) {
+      map.set(String.fromCharCode(b), Uint8Array.of(b));
+    }
+
+    // 双字节区：首字节 0x81~0xFE，尾字节 0x40~0xFE（跳过 0x7F）
+    const pair = new Uint8Array(2);
+    for (let lead = 0x81; lead <= 0xFE; lead++) {
+      for (let trail = 0x40; trail <= 0xFE; trail++) {
+        if (trail === 0x7F) continue;
+        pair[0] = lead;
+        pair[1] = trail;
+        const ch = dec.decode(pair);
+        // 只接受"恰好一个字符"的有效组合
+        if (ch && ch.length === 1 && !map.has(ch)) {
+          map.set(ch, Uint8Array.of(lead, trail));
+        }
+      }
+    }
+    return map;
+  }
+
+  return {
+    /** 该字符能否用 GBK 表示 */
+    canEncode(ch) {
+      const m = buildMap();
+      return !!m && m.has(ch);
+    },
+    /**
+     * 把字符串编码为 GBK 字节。
+     * @returns {Uint8Array}
+     * @throws 遇到 GBK 无法表示的字符时抛错
+     */
+    encode(str) {
+      const m = buildMap();
+      if (!m) throw new Error('当前浏览器不支持 GBK 编码');
+
+      const out = [];
+      for (const ch of str) {
+        const bytes = m.get(ch);
+        if (!bytes) {
+          throw new Error('字符「' + ch + '」无法用 GBK 表示（U+' +
+            ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0') + '）');
+        }
+        for (let i = 0; i < bytes.length; i++) out.push(bytes[i]);
+      }
+      return new Uint8Array(out);
+    },
+    /** 字节转十六进制显示，如 "@S" -> 40 53 */
+    hex(bytes) {
+      const a = [];
+      for (let i = 0; i < bytes.length; i++) {
+        a.push(bytes[i].toString(16).toUpperCase().padStart(2, '0'));
+      }
+      return a.join(' ');
+    },
+    /** 按 GBK 解码回字符串（用于回显校验） */
+    decode(bytes) {
+      const m = buildMap();
+      if (m && decoder) {
+        try { return decoder.decode(bytes); } catch (e) { /* 落到下面 */ }
+      }
+      // 退化：只处理 ASCII
+      let s = '';
+      for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+      return s;
+    }
+  };
+})();
+
+/**
+ * 按 GBK 编码发布一条文本指令。
+ * 注意必须发 Uint8Array，若发字符串 MQTT.js 会按 UTF-8 编码。
+ */
+function sendCmdGbk(text) {
+  if (!isConnected()) {
+    showTip('设备未连接', '指令未下发：MQTT 连接已断开。');
+    return null;
+  }
+  let bytes;
+  try {
+    bytes = GBK.encode(text);
+  } catch (e) {
+    showTip('编码失败', String(e.message || e));
+    return null;
+  }
+  client.publish(MQTT_CONFIG.pubTopic, bytes, { qos: 0 });
+  return bytes;
+}
+
+/* ===================== 数据解析 ===================== */
+/**
+ * 兼容三种回传形态：
+ *   1) @M0@S 后跟若干 ^值* ，以 &@W 结尾（帧头 + 载荷 + 帧尾）
+ *   2) 任意前缀 + ^123*^456*&   带中文前缀等
+ *   3) DATA:1,2,3               纯 CSV
+ * 解析策略：先剥离帧头/帧尾，再扫描 ^数值* 结构；只有扫描不到才回落 CSV。
+ */
+function extractNumbers(raw) {
+  let body = String(raw).trim();
+
+  const dataIdx = body.indexOf('DATA:');
+  if (dataIdx >= 0) {
+    return body.slice(dataIdx + 5).split(/[,;\s]+/).map(Number).filter(n => Number.isFinite(n));
+  }
+
+  // 去掉帧头：第一个 '@' 到最后一个 '@S' 之后
+  const headEnd = body.lastIndexOf('@S');
+  if (headEnd >= 0) body = body.slice(headEnd + 2);
+  // 去掉帧尾：'&' 起（含 &@W 这类带后缀的帧尾）
+  const tailIdx = body.indexOf('&');
+  if (tailIdx >= 0) body = body.slice(0, tailIdx);
+
+  const nums = [];
+  const re = /\^([+-]?\d+(?:\.\d+)?)\*/g;
+  let m;
+  while ((m = re.exec(body)) !== null) nums.push(Number(m[1]));
+  if (nums.length) return nums;
+
+  // 兜底：宽松抽取所有数字
+  const loose = body.match(/[+-]?\d+(?:\.\d+)?/g);
+  return loose ? loose.map(Number) : [];
+}
+
+function parseData(raw) {
+  if (!raw) return;
+  let parsed;
+  try {
+    parsed = parseDeviceFrame(raw);
+  } catch (e) {
+    parsed = { forward: null, reverse: null, diff: [] };
+  }
+  // 曲线只绘制 @DD 差值段
+  const nums = parsed.diff || [];
+  if (!nums.length) {
+    // 这里到达的是"整帧都不含可用数值"的情况（拼帧超时的半截帧已在
+    // combineFrame 内丢弃，不会走到这里）。
+    // 不关闭"检测中"弹窗：长时检测期间不能因为一条无法识别的报文就
+    // 误判为已结束；等待由 openWaiting 的超时兜底。
+    console.warn('[data] 回传无可用数值，已忽略');
+    showRawWarn(
+      '未解析出曲线数据（正向 ' + (parsed.forward ? parsed.forward.length : 0) +
+      ' / 反向 ' + (parsed.reverse ? parsed.reverse.length : 0) +
+      ' / 差值 ' + (parsed.diff ? parsed.diff.length : 0) + ' 点）',
+      raw
+    );
+    return;
+  }
+  hideRawWarn();
+
+  // 按实际点数校正步长：设备返回的点数可能与下发参数不一致
+  if (scan.start !== scan.end && nums.length > 1) {
+    const step = (scan.end - scan.start) / (PROTOCOL.sampleFirstPoint ? nums.length - 1 : nums.length);
+    if (step > 0) scan = Object.assign({}, scan, { step });
+  }
+
+  // 收到任何有效数据帧都关闭等待弹窗并切到结果页
+  // 注意：这几个步骤用 try/catch 分开保护 —— 其中任何一步抛错都不能
+  // 阻断后面的 drawCurve()，否则会表现成"有坐标轴、没有曲线"。
+  try { closeWaiting(); } catch (e) {}
+  try { showDetectPage(); } catch (e) { console.warn('[ui] 切换结果页失败：' + e.message); }
+  try { setScanInfo(parsed); } catch (e) {}
+  try { runHeavyMetalAnalysis(nums, scan); } catch (e) { console.warn('[hm] 分析失败：' + e.message); }
+
+  // 只有本机发起的任务，或刚收到首帧后 1.5s 内的后续帧，才允许写历史
+  const isFirstFrame = !!currentTask;
+  const inFollowUpWindow = !isFirstFrame && hasRecentSave();
+
+  // 先画曲线：确保任何后续步骤出错都不会影响它
+  drawCurve(nums);
+
+  if (!isFirstFrame && !inFollowUpWindow) return; // 杂散帧只刷新曲线，不落库
+
+  const taskLabel = isFirstFrame ? PROTOCOL.task[currentTask].label : lastSavedLabel;
+  if (isFirstFrame) currentTask = ''; // 消费本轮任务，避免残留
+  try {
+    if (isFirstFrame) saveHistory(nums, taskLabel); // 首帧立即落库
+    else if (!replaceRecentHistory(nums)) saveHistory(nums, taskLabel); // 更完整的帧覆盖同一条
+  } catch (e) {
+    console.warn('[history] 落库失败：' + e.message);
+  }
+
+  // 本轮检测完成 → 安排自动返回首页。
+  // 放在最后：即使上面落库失败，也不影响曲线显示与自动返回。
+  // 后续分片帧到达会重置计时（见 scheduleAutoReturn 内部）。
+  try { scheduleAutoReturn(); } catch (e) { /* 自动返回失败不影响其它功能 */ }
+}
+
+/** 显示解析情况，便于确认设备回传是否完整 */
+function setScanInfo(parsed) {
+  const n = a => (a && a.length ? a.length : '--');
+  const el = $('scanInfo');
+  if (!el) return;
+  let text = '正向 ' + n(parsed.forward) + ' 点 ｜ 反向 ' + n(parsed.reverse) +
+    ' 点 ｜ 差值 ' + n(parsed.diff) + ' 点';
+  if (isAllZero(parsed.diff)) {
+    // 差值全 0：曲线是一条贴 0 的平直线，必须说明，否则会被误判为"没收到数据"
+    text += '（全部为 0 → 曲线为 0 的平直线）';
+  }
+  if (parsed.source === 'fallback') text += '［未找到差值段，按整帧解析］';
+  if (parsed.source === 'diff' && !parsed.hasTerminator) text += '［帧尾缺少 &，可能被截断］';
+  el.textContent = text;
+}
+
+function isResultPageVisible() {
+  return !$('detectPage').classList.contains('hidden');
+}
+
+// 距最近一次落库是否还在"同一轮数据"的窗口内
+function hasRecentSave() {
+  const list = getHistoryList();
+  const tip = list[0];
+  return !!(tip && tip.savedAt != null && Date.now() - tip.savedAt <= 1500);
+}
+
+// 用更完整的帧覆盖刚刚写入的那条历史（而非新增一条）；轮次已过则整帧丢弃
+function replaceRecentHistory(nums) {
+  const list = getHistoryList();
+  const tip = list[0];
+  if (!tip || tip.savedAt == null || Date.now() - tip.savedAt > 1500) return false;
+  if (tip.data.length >= nums.length) return true; // 已有更完整的帧，忽略本次
+  tip.data = nums.slice();
+  tip.savedAt = Date.now();
+  tip.time = new Date().toLocaleString();
+  writeHistory(list);
+  return true;
+}
+
+/* 电流换算：raw -> μA
+ * 当前按固件已归一化处理（除以 currentScale）。
+ * 若灵敏度 KΩ 需要参与换算，改为：return raw / (k * PROTOCOL.currentScale);
+ */
+function currentFromRaw(raw) {
+  return raw / PROTOCOL.currentScale;
+}
+function voltAt(index) {
+  return PROTOCOL.sampleFirstPoint
+    ? scan.start + index * scan.step
+    : scan.start + (index + 1) * scan.step;
+}
+/* 起始电位不落数据点，仅在坐标轴上体现：X 轴范围即 起始 -> 终止 */
+function voltAxisOpt(startVolt, endVolt) {
+  return { min: startVolt, max: endVolt };
+}
+function setVoltStats(startVolt, endVolt, stepVolt) {
+  $('voltRange').textContent = startVolt + ' ~ ' + endVolt + ' V';
+  // 步长可能由点数反算得出，避免出现 0.004666666666666666 这类长浮点
+  let stepText = '--';
+  if (stepVolt != null && isFinite(stepVolt)) {
+    stepText = String(Number(Number(stepVolt).toFixed(4))) + ' V';
+  }
+  $('stepSize').textContent = stepText;
+}
+
+/* ===================== 绘制实时曲线 ===================== */
+/**
+ * 把已识别出的峰直接标在曲线上（参考电位仪软件的做法：
+ * 峰位、归属金属、浓度一次性呈现在图上，不必在表格与曲线之间来回比对）。
+ * 数据来自 analyzeHeavyMetals 填好的 speciesRows —— 该函数在 drawCurve 之前调用。
+ */
+function buildPeakMarks(sourceRows) {
+  const rows = ((sourceRows || speciesRows) || []).filter(function (r) {
+    return r && r.potential !== null && r.peakCurrent !== null;
+  });
+  if (!rows.length) return { data: [] };
+
+  return {
+    symbol: 'circle',
+    symbolSize: 7,
+    itemStyle: { color: '#1677ff', borderColor: '#fff', borderWidth: 2 },
+    emphasis: { scale: 1.3 },
+    label: {
+      show: true,
+      position: 'top',
+      distance: 7,
+      formatter: function (p) { return p.data.tip; },
+      color: '#0f172a',
+      fontFamily: 'ui-monospace, Consolas, monospace',
+      fontSize: 11,
+      fontWeight: 600,
+      backgroundColor: 'rgba(255,255,255,.92)',
+      borderColor: '#dbe4f0',
+      borderWidth: 1,
+      borderRadius: 4,
+      padding: [2, 6]
+    },
+    data: rows.map(function (r) {
+      const conc = (r.concentration === null || r.concentration === undefined)
+        ? '' : String(r.concentration);
+      return {
+        name: r.species,
+        coord: [Number(r.potential), Number(r.peakCurrent)],
+        tip: r.species + (conc ? ' ' + conc : '')
+      };
+    })
+  };
+}
+
+function drawCurve(nums) {
+  const n = nums.length;
+  if (n < 1) return;
+  // 图表尚未创建（例如容器还没显示）时先建出来，避免直接对 null 调 setOption
+  if (!chart) {
+    try {
+      initChart();
+    } catch (e) {
+      console.warn('[chart] 图表创建失败：' + e.message);
+      return;
+    }
+  }
+
+  // 记录本次曲线数据，供「导出数据」使用
+  lastCurveRaw = nums.slice();
+  lastCurveVolts = nums.map((_, i) => voltAt(i));
+
+  const pts = nums.map((raw, i) => [voltAt(i), currentFromRaw(raw)]);
+
+  chart.setOption({
+    // 轴范围锁定为 起始->终止：起始电位不入数据点，只作为坐标轴左端基准
+    xAxis: voltAxisOpt(scan.start, scan.end),
+    series: [{ data: pts, markPoint: buildPeakMarks() }]
+  });
+
+  // 结果摘要条（检测时间在这里更新）
+  const now = new Date();
+  const runTime = $('runTime');
+  if (runTime) runTime.textContent = now.toLocaleString();
+  try { renderRunStrip(); } catch (e) { console.warn('[run] 摘要刷新失败：' + e.message); }
+
+  setVoltStats(scan.start, scan.end, scan.step);
+
+  const currents = nums.map(currentFromRaw);
+  const max = Math.max.apply(null, currents);
+  const min = Math.min.apply(null, currents);
+  const avg = currents.reduce((a, b) => a + b, 0) / n;
+
+  const ptsEl = $('valPoints');
+  if (ptsEl) ptsEl.textContent = String(n);
+  const depEl = $('valDeposit');
+  if (depEl) depEl.textContent = (activeDepositS != null && Number(activeDepositS) > 0)
+    ? String(activeDepositS) : '--';
+
+  $('valMax').textContent = max.toFixed(2);
+  $('valMin').textContent = min.toFixed(2);
+  $('valAvg').textContent = avg.toFixed(2);
+  $('valDelta').textContent = (max - min).toFixed(2);
+}
+
+/* ===================== 历史记录 ===================== */
+// 唯一负责解包 + 校验的函数。
+// 兼容两种落库格式：
+//   v1（旧）：裸数组 [ {..}, {..} ]
+//   v2（新）：{ version: 2, items: [ {..}, {..} ] }
+// 注意：解包必须在这里做，不能在调用方"判定格式后"再交给本函数 —— 本函数拿到的一直是原始字符串。
+function getHistoryList() {
+  let parsed;
+  try { parsed = JSON.parse(localStorage.getItem(HISTORY_KEY)); } catch (e) { return []; }
+  const list = Array.isArray(parsed) ? parsed
+    : (parsed && Array.isArray(parsed.items)) ? parsed.items
+    : [];
+  return list.filter(it => it && Array.isArray(it.data) && it.data.length &&
+    Number.isFinite(it.startVolt) && Number.isFinite(it.endVolt) && Number.isFinite(it.stepVolt));
+}
+function writeHistory(list) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify({ version: HISTORY_VERSION, items: list }));
+  } catch (e) {
+    // 容量不足时降级保留最近几条
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify({ version: HISTORY_VERSION, items: list.slice(0, 5) }));
+    } catch (e2) {
+      showTip('历史记录保存失败', '浏览器本地存储写入失败（可能已满或处于隐私模式），最新记录未能保存。');
+    }
+  }
+}
+
+function saveHistory(rawData, taskLabel) {
+  if (!rawData.length) return;
+  const label = taskLabel || lastSavedLabel || '检测任务';
+  const list = getHistoryList();
+  const dev = getActiveDevice();
+  list.unshift({
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    time: new Date().toLocaleString(),
+    savedAt: Date.now(),
+    taskType: label,
+    // 来源设备：便于在历史里区分是哪台设备测的
+    deviceId: dev ? dev.id : '',
+    deviceName: dev ? dev.name : '',
+    startVolt: scan.start,
+    endVolt: scan.end,
+    stepVolt: scan.step,
+    depositS: activeDepositS,       // 本次沉积时间（s），可能为 null
+    data: rawData.slice()
+  });
+  if (list.length > HISTORY_MAX) list.length = HISTORY_MAX;
+  writeHistory(list);
+  lastSavedLabel = label;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function currentLabel(it) {
+  const vals = it.data.map(currentFromRaw);
+  return { n: vals.length, max: Math.max.apply(null, vals), avg: vals.reduce((a, b) => a + b, 0) / vals.length };
+}
+
+/** 记录所属设备的筛选键 */
+function historyDeviceKey(it) {
+  return (it && it.deviceId) ? String(it.deviceId) : '__none__';
+}
+
+/** 按当前设备筛选条件取出历史记录 */
+function getFilteredHistory() {
+  const all = getHistoryList();
+  if (!historyDeviceFilter) return all;
+  return all.filter(function (it) {
+    return historyDeviceKey(it) === historyDeviceFilter;
+  });
+}
+
+/** 重建设备下拉选项（保留当前选中项） */
+function renderHistoryDeviceOptions() {
+  const sel = $('histDeviceFilter');
+  if (!sel) return;
+  const all = getHistoryList();
+  const map = {};          // key -> 显示名
+  const order = [];
+  all.forEach(function (it) {
+    const key = historyDeviceKey(it);
+    if (!map[key]) {
+      map[key] = (it && it.deviceName) ? it.deviceName : '未记录设备';
+      order.push(key);
+    }
+  });
+
+  // 当前筛选值已不存在（设备被删且没有记录）→ 回到全部
+  if (historyDeviceFilter && !map[historyDeviceFilter]) historyDeviceFilter = '';
+
+  let html2 = '<option value="">全部设备</option>';
+  order.forEach(function (key) {
+    const label = map[key];
+    const count = all.filter(function (it) { return historyDeviceKey(it) === key; }).length;
+    html2 += '<option value="' + escapeHtml(key) + '"' +
+      (key === historyDeviceFilter ? ' selected' : '') + '>' +
+      escapeHtml(label) + '（' + count + '）</option>';
+  });
+  sel.innerHTML = html2;
+  sel.value = historyDeviceFilter;
+}
+
+/** 切换设备筛选 */
+function onHistoryDeviceFilterChange() {
+  const sel = $('histDeviceFilter');
+  historyDeviceFilter = sel ? sel.value : '';
+
+  const visible = getFilteredHistory();
+  // 选择里剔除被筛掉的记录
+  compareIds = compareIds.filter(function (id) {
+    return visible.some(function (it) { return it.id === id; });
+  });
+  if (!compareIds.length && visible.length) compareIds = [visible[0].id];
+  selectedHistoryId = compareIds.length ? compareIds[compareIds.length - 1] : null;
+  historyTopId = visible.length ? visible[0].id : null;
+
+  renderHistoryList();
+  if (visible.length) renderHistoryChart();
+  else resetHistoryStats();
+  syncHistoryDeposit();
+}
+
+function renderHistoryList() {
+  const list = getFilteredHistory();
+  const container = $('historyList');
+  if (!list.length) {
+    const msg = historyDeviceFilter ? '该设备暂无历史记录' : '暂无历史记录';
+    container.innerHTML = '<div style="text-align:center; color:var(--ink-4); padding:36px 0; font-size:13px;">' +
+      msg + '</div>';
+    return;
+  }
+  const selectedId = String(selectedHistoryId == null ? '' : selectedHistoryId);
+  container.innerHTML = list.map(item => {
+    const s = currentLabel(item);
+    const checked = compareIds.indexOf(item.id) >= 0;
+    const colorIdx = compareIds.indexOf(item.id);
+    const dot = checked
+      ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;flex:none;
+           background:${COMPARE_PALETTE[colorIdx % COMPARE_PALETTE.length].hex};"></span>`
+      : '';
+    return `
+      <div class="hist-item${String(item.id) === selectedId ? ' active' : ''}">
+        <div class="row1">
+          <label class="cmp">
+            <input type="checkbox" data-id="${item.id}" ${checked ? 'checked' : ''}
+              onchange="toggleCompare(${item.id})" />
+            ${dot}
+            <span class="type">${escapeHtml(item.taskType)}</span>
+          </label>
+          ${item.deviceName
+            ? `<span class="dev-chip" title="来源设备">${escapeHtml(item.deviceName)}</span>`
+            : ''}
+        </div>
+        <div class="when">${escapeHtml(item.time)}</div>
+        <div class="nums">扫描 ${item.startVolt} ~ ${item.endVolt} V<br>峰值 ${s.max.toFixed(2)} μA ｜ 均值 ${s.avg.toFixed(2)} μA</div>
+        <div class="acts">
+          <button type="button" class="btn" style="flex:1; padding:6px 10px; font-size:12.5px;"
+            onclick="loadHistoryToChart(${item.id})">只看这条</button>
+          <button type="button" class="btn btn-danger" style="padding:6px 12px; font-size:12.5px;"
+            onclick="deleteHistoryItem(${item.id})">删除</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  // 顶部显示已选数量
+  const cnt = $('cmpCount');
+  if (cnt) {
+    cnt.textContent = compareIds.length ? '已选 ' + compareIds.length + ' 条' : '';
+  }
+}
+
+/* =====================================================================
+ * 历史记录：多选对比
+ * ---------------------------------------------------------------------
+ * 勾选列表里的复选框即可把多条曲线叠加到同一张图里比较，最多 6 条。
+ *   - 勾 1 条   正常单曲线（带面积填充）
+ *   - 勾多条    多条曲线叠加，颜色区分 + 图例，关闭面积填充避免互相遮挡
+ *   - 只看这条 清空其它选择，只保留这一条
+ *   - 清空选择 取消全部勾选
+ * ===================================================================*/
+
+/** 记录的时间部分，如 "2024/1/1 10:23:45" → "10:23:45" */
+function timePartOf(item) {
+  const m = String(item.time || '').match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
+  return m ? m[1] : '';
+}
+
+/** 图例名：任务类型 + 时间 */
+function compareLabel(item) {
+  const t = timePartOf(item);
+  return item.taskType + (t ? ' ' + t : '');
+}
+
+/** 把一条记录转成 [电位, 电流] 点列 */
+function pointsOf(item) {
+  return item.data.map((raw, i) => {
+    const volt = PROTOCOL.sampleFirstPoint
+      ? item.startVolt + i * item.stepVolt
+      : item.startVolt + (i + 1) * item.stepVolt;
+    return [volt, currentFromRaw(raw)];
+  });
+}
+
+/** 把统计卡更新为某一条记录的值 */
+function updateHistoryStats(item) {
+  if (!item) return;
+  const n = item.data.length;
+  const currents = item.data.map(currentFromRaw);
+  $('hisVoltRange').textContent = item.startVolt + ' ~ ' + item.endVolt + ' V';
+  $('hisValMax').textContent = Math.max.apply(null, currents).toFixed(2);
+  $('hisValAvg').textContent = (currents.reduce((a, b) => a + b, 0) / n).toFixed(2);
+}
+
+/** 勾选 / 取消勾选一条记录 */
+function toggleCompare(id) {
+  const i = compareIds.indexOf(id);
+  if (i >= 0) {
+    compareIds.splice(i, 1);
+  } else {
+    if (compareIds.length >= COMPARE_MAX) {
+      showTip('最多对比 ' + COMPARE_MAX + ' 条', '请先取消一些勾选，再选择新的记录。');
+      renderHistoryList();   // 恢复复选框状态
+      return;
+    }
+    compareIds.push(id);
+  }
+  selectedHistoryId = compareIds.length ? compareIds[compareIds.length - 1] : null;
+  renderHistoryChart();
+  renderHistoryList();
+}
+
+/** 清空全部勾选 */
+function clearCompare() {
+  compareIds = [];
+  selectedHistoryId = null;
+  renderHistoryChart();
+  renderHistoryList();
+}
+
+/** 「只看这条」：清空其它选择，只保留这一条 */
+function loadHistoryToChart(id) {
+  const item = getHistoryList().find(i => i.id === id);
+  if (!item) return;
+  compareIds = [id];
+  selectedHistoryId = id;
+  renderHistoryChart();
+  renderHistoryList();
+}
+
+/** 按当前 compareIds 重绘历史图表 */
+function renderHistoryChart() {
+  if (!historyChart) return;
+
+  const all = getFilteredHistory();
+  // 过滤掉已被删除的记录
+  compareIds = compareIds.filter(id => all.some(it => it.id === id));
+
+  const items = compareIds
+    .map(id => all.find(it => it.id === id))
+    .filter(Boolean);
+
+  if (!items.length) {
+    resetHistoryStats();
+    return;
+  }
+
+  const multi = items.length > 1;
+
+  // 轴范围取所有选中记录的并集
+  let xmin = Infinity;
+  let xmax = -Infinity;
+  items.forEach(it => {
+    if (Number(it.startVolt) < xmin) xmin = Number(it.startVolt);
+    if (Number(it.endVolt) > xmax) xmax = Number(it.endVolt);
+  });
+
+  const base = baseOption(COMPARE_PALETTE[0].hex, COMPARE_PALETTE[0].fill);
+
+  /* 图例名去重：同一秒内产生的多条记录名字会完全相同，
+   * 那样图例无法区分哪条是哪条。重名的加序号 (1)/(2)… */
+  const baseNames = items.map(compareLabel);
+  const nameCount = {};
+  baseNames.forEach(n => { nameCount[n] = (nameCount[n] || 0) + 1; });
+  const nameSeq = {};
+  const seriesNames = baseNames.map(n => {
+    if (nameCount[n] <= 1) return n;
+    nameSeq[n] = (nameSeq[n] || 0) + 1;
+    return n + ' (' + nameSeq[n] + ')';
+  });
+
+  // 统计与标注都以最后勾选的那条为准
+  const primary = items[items.length - 1];
+
+  const opt = {
+    xAxis: Object.assign({}, base.xAxis, {
+      min: isFinite(xmin) ? xmin : 'dataMin',
+      max: isFinite(xmax) ? xmax : 'dataMax'
+    }),
+    yAxis: base.yAxis,
+    grid: multi ? Object.assign({}, base.grid, { top: 46 }) : base.grid,
+    tooltip: base.tooltip,
+    series: items.map((item, i) => {
+      const c = COMPARE_PALETTE[i % COMPARE_PALETTE.length];
+      const s = {
+        name: seriesNames[i],
+        type: 'line',
+        smooth: true,
+        symbol: 'none',
+        lineStyle: { color: c.hex, width: 2.2, cap: 'round' },
+        itemStyle: { color: c.hex },
+        data: pointsOf(item)
+      };
+      // 单条时把识别出的峰标在曲线上（与检测页一致）
+      if (!multi && i === 0) {
+        s.markPoint = buildPeakMarks(speciesRowsOfHistory(item));
+      }
+      // 单条时保留面积填充；多条时关闭，避免互相遮挡看不清
+      if (!multi) {
+        s.areaStyle = {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: c.fill + '0.26)' },
+            { offset: 1, color: c.fill + '0.01)' }
+          ])
+        };
+      }
+      return s;
+    })
+  };
+
+  if (multi) {
+    opt.legend = {
+      top: 4,
+      right: 8,
+      itemWidth: 16,
+      itemHeight: 8,
+      itemGap: 14,
+      textStyle: { color: '#64748b', fontSize: 11.5 },
+      data: opt.series.map(s => s.name)
+    };
+    // 多曲线时 tooltip 列出每一条的值
+    opt.tooltip = Object.assign({}, base.tooltip, {
+      formatter: function (params) {
+        if (!params || !params.length) return '';
+        let html = '电位　' + Number(params[0].value[0]).toFixed(3) + ' V';
+        params.forEach(p => {
+          html += '<br/>' + p.marker + p.seriesName + '　' +
+                  Number(p.value[1]).toFixed(2) + ' μA';
+        });
+        return html;
+      }
+    });
+  }
+
+  // notMerge = true：彻底替换，避免旧的 series / legend 残留
+  historyChart.setOption(opt, true);
+  resizeSoon(historyChart);
+
+  // 统计卡显示最后勾选的那一条
+  updateHistoryStats(primary);
+  // 来源设备与沉积时间：只在"单看一条"时显示；多条对比时隐藏
+  const only = (items.length === 1) ? primary : null;
+  renderHistoryDevice(only);
+  renderHistoryDeposit(only);
+  // 重金属结果只在"单看一条"时显示；多条对比时隐藏
+  renderHistorySpecies(items.length === 1 ? primary : null);
+}
+
+/** 历史曲线左上角的沉积时间（item 为 null 时隐藏） */
+function renderHistoryDeposit(item) {
+  const box = $('hisDepositReadout');
+  const val = $('hisDepositTime');
+  if (box) box.classList.toggle('hidden', !item);
+  if (!val) return;
+  const s = item && item.depositS;
+  val.textContent = (s != null && Number(s) > 0) ? (Number(s) + ' s') : '--';
+}
+
+function deleteHistoryItem(id) {
+  writeHistory(getHistoryList().filter(i => i.id !== id));
+  if (selectedHistoryId === id) selectedHistoryId = null;
+  const i = compareIds.indexOf(id);
+  if (i >= 0) compareIds.splice(i, 1);
+  renderHistoryDeviceOptions();
+  renderHistoryChart();
+  renderHistoryList();
+}
+function clearAllHistory() {
+  if (!confirm('确定清空所有历史记录？')) return;
+  localStorage.removeItem(HISTORY_KEY);
+  selectedHistoryId = null;
+  compareIds = [];
+  historyDeviceFilter = '';
+  renderHistoryDeviceOptions();
+  renderHistoryList();
+  resetHistoryStats();
+}
+function resetHistoryStats() {
+  if (historyChart) historyChart.setOption({ xAxis: { min: 0, max: 1 }, series: [{ data: [] }] });
+  $('hisVoltRange').textContent = '--';
+  $('hisValMax').textContent = '--';
+  $('hisValAvg').textContent = '--';
+  renderHistorySpecies(null);
+  renderHistoryDeposit(null);
+  renderHistoryDevice(null);
+}
+
+/* =====================================================================
+ * 导出数据（电位 ↔ 电流）
+ * ---------------------------------------------------------------------
+ * 输出纯文本，格式：
+ *   # 注释行（任务类型 / 时间 / 扫描范围 / 步长 / 沉积时间 / 点数）
+ *   # 电位(V)	电流(μA)
+ *   -1.1950	0.1500
+ *   ...
+ * 制表符分隔，便于直接拖进 Excel / Origin。
+ * 文件带 UTF-8 BOM，Windows 记事本打开中文不乱码。
+ * ===================================================================*/
+
+/** 两位补零 */
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+/** 生成文件名用时间戳：20260801_203104 */
+function stampOf(d) {
+  const t = d instanceof Date ? d : new Date();
+  return t.getFullYear() + pad2(t.getMonth() + 1) + pad2(t.getDate()) +
+    '_' + pad2(t.getHours()) + pad2(t.getMinutes()) + pad2(t.getSeconds());
+}
+
+/**
+ * 拼出重金属检测结果块（全部以 # 注释，保证下方数据段仍可直接导入表格）。
+ * @param {Array} rows 结果行（species / potential / concentration / peakCurrent）
+ */
+function buildResultLines(rows) {
+  const cell = v => (v === null || v === undefined ? '--' : String(v));
+  const L = [];
+  L.push('# 重金属检测结果');
+  L.push('# 种类\t对应电位(V)\t浓度(mg/kg)\t峰值电流(μA)');
+  (rows || []).forEach(function (r) {
+    L.push('# ' + r.species + '\t' + cell(r.potential) + '\t' +
+      cell(r.concentration) + '\t' + cell(r.peakCurrent));
+  });
+  L.push('#');
+  return L;
+}
+
+/**
+ * 拼出导出文本。
+ * @param {object} meta   { taskType, time, startVolt, endVolt, stepVolt, depositS }
+ * @param {number[]} volts 逐点电位
+ * @param {number[]} currents 逐点电流（μA）
+ * @param {Array} rows 重金属检测结果（可选）
+ */
+function buildCurveText(meta, volts, currents, rows) {
+  const L = [];
+  L.push('# 直插式土壤重金属电化学检测系统');
+  L.push('# 任务类型：' + (meta.taskType || '检测任务'));
+  if (meta.deviceName) L.push('# 来源设备：' + meta.deviceName);
+  if (meta.time) L.push('# 检测时间：' + meta.time);
+  L.push('# 扫描范围：' + meta.startVolt + ' ~ ' + meta.endVolt + ' V');
+  L.push('# 阶跃步长：' + meta.stepVolt + ' V');
+  L.push('# 沉积时间：' + (meta.depositS != null && Number(meta.depositS) > 0
+    ? Number(meta.depositS) + ' s' : '--'));
+  L.push('# 数据点数：' + currents.length);
+  L.push('#');
+  // 检测结果（注释形式，避免污染下方两列数据）
+  buildResultLines(rows).forEach(l => L.push(l));
+  L.push('# 电位(V)\t电流(μA)');
+  for (let i = 0; i < currents.length; i++) {
+    L.push(Number(volts[i]).toFixed(4) + '\t' + Number(currents[i]).toFixed(4));
+  }
+  return L.join('\r\n') + '\r\n';
+}
+
+/** 触发浏览器下载 */
+function downloadText(filename, text) {
+  try {
+    const blob = new Blob(['\ufeff' + text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    return true;
+  } catch (e) {
+    showTip('导出失败', '浏览器不支持文件下载：' + (e.message || e));
+    return false;
+  }
+}
+
+/** 导出检测结果页当前曲线 */
+function exportLiveCurve() {
+  if (!lastCurveRaw.length || lastCurveRaw.length !== lastCurveVolts.length) {
+    showTip('暂无可导出的数据', '还没有收到曲线数据，请先完成一次检测。');
+    return;
+  }
+  const currents = lastCurveRaw.map(currentFromRaw);
+  const dev = getActiveDevice();
+  const text = buildCurveText({
+    taskType: '检测任务',
+    deviceName: dev ? dev.name : '',
+    time: new Date().toLocaleString(),
+    startVolt: scan.start,
+    endVolt: scan.end,
+    stepVolt: scan.step,
+    depositS: activeDepositS
+  }, lastCurveVolts, currents, speciesRows);
+
+  downloadText('电位电流_检测_' + stampOf(new Date()) + '.txt', text);
+}
+
+/** 导出历史记录页当前选中的曲线（勾选多条则逐条导出） */
+function exportHistoryCurve() {
+  const list = getHistoryList();
+  const ids = compareIds.filter(id => list.some(it => it.id === id));
+  const items = ids.map(id => list.find(it => it.id === id)).filter(Boolean);
+
+  if (!items.length) {
+    showTip('未选择记录', '请先在左侧勾选要导出的历史记录。');
+    return;
+  }
+
+  const blocks = items.map(function (item) {
+    const pts = pointsOf(item);
+    return buildCurveText({
+      taskType: item.taskType,
+      deviceName: item.deviceName || '',
+      time: item.time,
+      startVolt: item.startVolt,
+      endVolt: item.endVolt,
+      stepVolt: item.stepVolt,
+      depositS: item.depositS
+    }, pts.map(p => p[0]), pts.map(p => p[1]), speciesRowsOfHistory(item));
+  });
+
+  const name = items.length === 1
+    ? '电位电流_' + items[0].taskType + '_' + stampOf(new Date()) + '.txt'
+    : '电位电流_对比' + items.length + '条_' + stampOf(new Date()) + '.txt';
+
+  downloadText(name, blocks.join('\r\n'));
+}
+
+/* =====================================================================
+ * 参数设置页
+ * ---------------------------------------------------------------------
+ * 取代原来的参数弹窗：表单、指令预览、运行信息一屏呈现。
+ * currentTask 决定读哪一套配置（检测带参数 / 清洁固定指令）。
+ * ===================================================================*/
+
+/** 出厂默认参数 */
+const PARAM_DEFAULTS = {
+  m_p1: '-1.2', m_p2: '0.2', m_p6: '0.05', m_p5: '0.005',
+  m_p3: '-1.2', m_p4: '200', m_p8: '10', m_p7: '25'
+};
+
+/** 参数页是从哪个页面进来的，取消时回到那里 */
+let paramFromPage = 'homePage';
+
+/** 刷新运行信息（当前设备 / 预计点数 / 扫描范围 / 沉积时间） */
+function refreshParamInfo() {
+  const cfg = PROTOCOL.task[currentTask];
+  if (!cfg) return;
+
+  const p = currentParams();
+  const dev = getActiveDevice();
+  const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+  set('paramDevice', dev ? dev.name : '--');
+
+  if (cfg.withParams === false) {
+    set('paramPoints', '--');
+    set('paramRange', '--');
+    set('paramDeposit', '--');
+  } else {
+    const start = p.startMv / PROTOCOL.voltScale;
+    const end = p.endMv / PROTOCOL.voltScale;
+    const step = p.stepMv / PROTOCOL.voltScale;
+    const n = (step > 0 && end !== start) ? Math.round((end - start) / step) : 0;
+    set('paramPoints', n > 0 ? String(n) : '--');
+    set('paramRange', start + ' ~ ' + end + ' V');
+    set('paramDeposit', p.depositS > 0 ? p.depositS + ' s' : '--');
+  }
+}
+
+/** 打开参数页 */
+function showParamPage(task) {
+  if (!isConnected()) {
+    showTip('请先连接设备', '执行检测/清洁任务前，请先连接设备');
+    return false;
+  }
+  // 记录来源页面，取消时原路返回
+  ['homePage', 'detectPage', 'historyPage', 'devicePage'].forEach(function (id) {
+    const el = $(id);
+    if (el && !el.classList.contains('hidden')) paramFromPage = id;
+  });
+
+  currentTask = task;
+  const cfg = PROTOCOL.task[task];
+
+  resetScrollIfSwitching('paramPage');
+  ['homePage', 'detectPage', 'historyPage', 'devicePage'].forEach(function (id) {
+    const el = $(id);
+    if (el) el.classList.add('hidden');
+  });
+  $('paramPage').classList.remove('hidden');
+  syncHomeBtn(false);
+  // 先定导航高亮（它会顺带改标题），再覆盖成本页标题，避免被覆盖
+  setActiveNav(task === 'CLEAN' ? 'navClean' : 'navDetect');
+  setPageHeader(task === 'CLEAN' ? '清洁参数' : '检测参数');
+
+  // 标题与按钮文案
+  const title = $('paramPageTitle');
+  if (title) title.textContent = cfg.label + '参数';
+  const btn = $('btnStart');
+  if (btn) btn.textContent = cfg.action;
+
+  // 清洁任务没有参数，隐藏表单
+  const form = $('paramForm');
+  const note = $('paramNoParams');
+  const h = cfg.withParams === false;
+  if (form) form.classList.toggle('hidden', h);
+  if (note) note.classList.toggle('hidden', !h);
+  // 清洁任务没有参数：隐藏"恢复默认"和三项参数指标
+  ['btnResetParams', 'pmPoints', 'pmRange', 'pmDeposit'].forEach(function (id) {
+    const el = $(id);
+    if (el) el.classList.toggle('hidden', h);
+  });
+  // 清洁任务收成单列居中
+  const pp = $('paramPage');
+  if (pp) pp.classList.toggle('is-clean', h);
+
+  // 表单输入实时刷新预览
+  if (!showParamPage._bound) {
+    document.querySelectorAll('#paramForm input').forEach(function (input) {
+      input.addEventListener('input', refreshParamInfo);
+    });
+    showParamPage._bound = true;
+  }
+
+  syncDepositTimeFromForm();
+  refreshParamInfo();
+  return true;
+}
+
+/** 关闭参数页：回到来源页面 */
+function closeParamPage() {
+  $('paramPage').classList.add('hidden');
+  currentTask = '';
+  const back = paramFromPage || 'homePage';
+  if (back === 'detectPage') { showDetectPage(); return; }
+  if (back === 'historyPage') { showHistoryPage(); return; }
+  if (back === 'devicePage') { showDevicePage(); return; }
+  showHome();
+}
+
+/** 恢复默认参数 */
+function resetParamForm() {
+  Object.keys(PARAM_DEFAULTS).forEach(function (id) {
+    const el = $(id);
+    if (el) el.value = PARAM_DEFAULTS[id];
+  });
+  syncDepositTimeFromForm();
+  refreshParamInfo();
+}
+
+/* =====================================================================
+ * 设备管理页（多设备）
+ * ---------------------------------------------------------------------
+ * 左侧列表管理全部设备，右侧编辑"当前选中"的那一台。
+ * 「设为当前」把选中设备切换为使用中，连接时读取它的参数。
+ * ===================================================================*/
+
+/** 渲染左侧设备列表 */
+function renderDeviceList() {
+  const box = $('deviceList');
+  if (!box) return;
+  if (!deviceList.length) {
+    box.innerHTML = '<div class="dev-empty">暂无设备</div>';
+    return;
+  }
+  box.innerHTML = deviceList.map(function (d) {
+    const isActive = d.id === activeDeviceId;
+    const isEditing = d.id === editingDeviceId;
+    return '<div class="dev-item' + (isEditing ? ' editing' : '') +
+        '" onclick="selectDevice(\'' + d.id + '\')">' +
+      '<div class="dev-top">' +
+        '<span class="dev-name">' + escapeHtml(d.name) + '</span>' +
+        (isActive ? '<span class="dev-badge">使用中</span>' : '') +
+      '</div>' +
+      '<div class="dev-host">' + escapeHtml(d.host) + ':' + d.port + '</div>' +
+      '<div class="dev-topics">' + escapeHtml(d.subTopic) + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+/** 把选中设备的值填进表单 */
+function fillDeviceForm() {
+  const d = getEditingDevice();
+  const set = (id, v) => { const el = $(id); if (el) el.value = v; };
+  if (!d) {
+    ['d_name', 'd_host', 'd_port', 'd_sub', 'd_pub'].forEach(id => set(id, ''));
+    const tls0 = $('d_tls');
+    if (tls0) tls0.checked = false;
+    return;
+  }
+  set('d_name', d.name);
+  set('d_host', d.host);
+  set('d_port', d.port);
+  set('d_sub', d.subTopic);
+  set('d_pub', d.pubTopic);
+  const tls = $('d_tls');
+  if (tls) tls.checked = !!d.useTLS;
+}
+
+/** 切换正在编辑的设备 */
+function selectDevice(id) {
+  if (!deviceList.some(d => d.id === id)) return;
+  editingDeviceId = id;
+  fillDeviceForm();
+  renderDeviceList();
+}
+
+/** 读取并校验表单 */
+function readDeviceForm() {
+  const val = id => String(($(id) || {}).value || '').trim();
+  const name = val('d_name');
+  const host = val('d_host');
+  const port = Number(($('d_port') || {}).value);
+  const sub = val('d_sub');
+  const pub = val('d_pub');
+  const tls = !!(($('d_tls') || {}).checked);
+
+  if (!host) { showTip('参数不完整', '服务器地址不能为空。'); return null; }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    showTip('端口无效', '端口应为 1 ~ 65535 之间的整数。');
+    return null;
+  }
+  if (!sub || !pub) { showTip('参数不完整', '订阅与发布主题都不能为空。'); return null; }
+  return {
+    name: name || host,
+    host: host,
+    port: port,
+    subTopic: sub,
+    pubTopic: pub,
+    useTLS: tls
+  };
+}
+
+/** 断开当前连接（切换设备 / 改参数后用，重连才生效） */
+function dropConnection() {
+  if (!isConnected() && !client) return false;
+  const old = client;
+  client = null;
+  try { old.end(true); } catch (e) {}
+  updateConnStatus(false);
+  return true;
+}
+
+/** 保存当前编辑的设备 */
+function saveDeviceForm() {
+  const d = getEditingDevice();
+  if (!d) { showTip('未选择设备', '请先在左侧选择要编辑的设备。'); return false; }
+  const v = readDeviceForm();
+  if (!v) return false;
+
+  Object.assign(d, v);
+  const wasActive = d.id === activeDeviceId;
+  if (wasActive) applyActiveDevice();
+  saveDeviceList();
+  renderDeviceList();
+  updateDeviceInfo();
+
+  if (wasActive && dropConnection()) {
+    showTip('已保存', '当前设备参数已更新，已断开连接，请重新连接使其生效。');
+  } else {
+    showTip('已保存', '设备「' + d.name + '」的配置已保存。');
+  }
+  return true;
+}
+
+/** 新增一台设备（默认不切换为当前） */
+function newDevice() {
+  const d = makeDevice('设备 ' + (deviceList.length + 1), {});
+  deviceList.push(d);
+  editingDeviceId = d.id;
+  saveDeviceList();
+  renderDeviceList();
+  fillDeviceForm();
+  updateDeviceInfo();
+  return d;
+}
+
+/** 把选中的设备设为"使用中" */
+function setActiveDevice() {
+  const d = getEditingDevice();
+  if (!d) { showTip('未选择设备', '请先在左侧选择设备。'); return false; }
+  if (d.id === activeDeviceId) {
+    showTip('已是当前设备', '设备「' + d.name + '」正在使用中。');
+    return true;
+  }
+  // 先校验表单，避免把非法参数设为当前
+  const v = readDeviceForm();
+  if (!v) return false;
+  Object.assign(d, v);
+  activeDeviceId = d.id;
+  applyActiveDevice();
+  saveDeviceList();
+  renderDeviceList();
+  updateDeviceInfo();
+
+  if (dropConnection()) {
+    showTip('已切换', '已切换为「' + d.name + '」并断开旧连接，请重新连接。');
+  } else {
+    showTip('已切换', '已切换为「' + d.name + '」，下次连接时生效。');
+  }
+  return true;
+}
+
+/** 删除当前编辑的设备 */
+function deleteDevice() {
+  const d = getEditingDevice();
+  if (!d) { showTip('未选择设备', '请先在左侧选择设备。'); return false; }
+  if (deviceList.length <= 1) {
+    showTip('无法删除', '至少需要保留一台设备。');
+    return false;
+  }
+  if (!confirm('确定删除设备「' + d.name + '」？')) return false;
+
+  const wasActive = d.id === activeDeviceId;
+  deviceList = deviceList.filter(x => x.id !== d.id);
+  if (wasActive) {
+    activeDeviceId = deviceList[0].id;
+    applyActiveDevice();
+  }
+  if (editingDeviceId === d.id) editingDeviceId = activeDeviceId;
+  saveDeviceList();
+  renderDeviceList();
+  fillDeviceForm();
+  updateDeviceInfo();
+
+  if (wasActive && dropConnection()) {
+    showTip('已删除', '当前设备已删除，已切换到「' + getActiveDevice().name + '」并断开连接。');
+  } else {
+    showTip('已删除', '设备「' + d.name + '」已删除。');
+  }
+  return true;
+}
+
+/** 恢复默认：把表单填成出厂值（保存后生效） */
+function resetDeviceForm() {
+  const d = getEditingDevice();
+  const set = (id, v) => { const el = $(id); if (el) el.value = v; };
+  set('d_host', DEVICE_DEFAULTS.host);
+  set('d_port', DEVICE_DEFAULTS.port);
+  set('d_sub', DEVICE_DEFAULTS.subTopic);
+  set('d_pub', DEVICE_DEFAULTS.pubTopic);
+  const tls = $('d_tls');
+  if (tls) tls.checked = DEVICE_DEFAULTS.useTLS;
+  showTip('已填入默认值', '点击「保存」后才会写入设备' + (d ? '「' + d.name + '」' : '') + '。');
+}
+
+/** 进入设备管理页 */
+function showDevicePage() {
+  resetScrollIfSwitching('devicePage');
+  $('homePage').classList.add('hidden');
+  $('detectPage').classList.add('hidden');
+  $('historyPage').classList.add('hidden');
+  $('devicePage').classList.remove('hidden');
+  $('paramPage').classList.add('hidden');
+  setPageHeader('设备管理');
+  syncHomeBtn(false);
+  renderDeviceList();
+  fillDeviceForm();
+  updateDeviceInfo();
+}
+
+/** 刷新运行状态区 */
+function updateDeviceInfo() {
+  const act = $('d_active');
+  if (act) {
+    const d = getActiveDevice();
+    act.textContent = d ? d.name : '--';
+  }
+  const state = $('d_state');
+  if (state) {
+    const on = isConnected();
+    state.textContent = on ? '已连接' : '未连接';
+    state.classList.toggle('accent', on);
+    state.classList.toggle('danger', !on);
+  }
+  const cnt = $('d_count');
+  if (cnt) cnt.textContent = String(mqttMsgCount);
+  const last = $('d_last');
+  if (last) last.textContent = lastMsgAt ? lastMsgAt.toLocaleTimeString() : '--';
+  const cid = $('d_client');
+  if (cid) cid.textContent = currentClientId || '--';
+}
+
+/* ===================== 工具 ===================== */
+function clearChart() {
+  if (chart) chart.setOption({ xAxis: { min: 0, max: 1 }, series: [{ data: [], markPoint: { data: [] } }] });
+
+  ['runTime', 'runPoints', 'runDeposit'].forEach(id => {
+    const el = $(id);
+    if (el) el.textContent = '--';
+  });
+  const badge0 = $('hmHitBadge');
+  if (badge0) { badge0.textContent = '未开始'; badge0.classList.remove('on'); }
+  $('voltRange').textContent = '--';
+  $('stepSize').textContent = '--';
+  $('valMax').textContent = '--';
+  $('valMin').textContent = '--';
+  $('valAvg').textContent = '--';
+  $('valDelta').textContent = '--';
+  const vp = $('valPoints');
+  if (vp) vp.textContent = '--';
+  const vd = $('valDeposit');
+  if (vd) vd.textContent = '--';
+  const info = $('scanInfo');
+  if (info) info.textContent = '等待扫描数据';
+  syncDepositTimeFromForm(); // 清空后按当前参数重新显示沉积时间
+}
+
+window.addEventListener('load', () => {
+  showHome();
+  checkLibs();
+  renderSpeciesTable();
+  // 初始化沉积时间显示，并跟随参数输入实时更新
+  syncDepositTimeFromForm();
+  const depositInput = $('m_p4');
+  if (depositInput) depositInput.addEventListener('input', syncDepositTimeFromForm);
+
+  
+  $('tipModal').addEventListener('click', e => { if (e.target.id === 'tipModal') closeTipModal(); });
+  // waitingModal 不再绑定遮罩点击，避免误触下发取消帧
+
+  window.addEventListener('beforeunload', () => {
+    clearTimeout(waitingTimer);
+    cancelAutoReturn();
+    clearInterval(waitingTick);
+    if (chartObserver && chart) chartObserver.disconnect();
+    if (historyObserver && historyChart) historyObserver.disconnect();
+    if (client) { try { client.end(true); } catch (e) {} }
+  });
+});
+
+/* =====================================================================
+ * 侧边导航
+ * ---------------------------------------------------------------------
+ * 只负责页面切换与高亮，不改变任何既有业务流程：
+ *   - 主界面：走 backToHome()（取消自动返回 + 显示首页）
+ *   - 检测/清洁：仍走 selectMode()（内含"未连接"守卫与参数弹窗）
+ *   - 历史：仍走 showHistoryPage()
+ * ===================================================================*/
+const NAV_IDS = ['navHome', 'navDetect', 'navClean', 'navHistory', 'navDevice'];
+
+function setActiveNav(id) {
+  NAV_IDS.forEach(k => {
+    const el = document.getElementById(k);
+    if (el) el.classList.toggle('active', k === id);
+  });
+  const titles = {
+    navHome:    '主界面',
+    navDetect:  '检测任务',
+    navClean:   '清洁任务',
+    navHistory: '历史记录',
+    navDevice:  '设备管理'
+  };
+  const t = titles[id];
+  if (!t) return;          // 未知 id 不改标题，避免误改
+  const pt = document.getElementById('pageTitle');
+  if (pt) pt.textContent = t;
+}
+
+/** 侧边栏「设备管理」 */
+function navDevice() {
+  cancelAutoReturn();
+  setActiveNav('navDevice');
+  showDevicePage();
+}
+
+/* =====================================================================
+ * 首页仪表盘
+ * ---------------------------------------------------------------------
+ * 概览统计、最近检测、峰值趋势全部来自真实历史记录，
+ * 没有数据时显示占位而不是假数据。
+ * ===================================================================*/
+
+/** 一条记录的最高电流（μA），用于趋势图 */
+function recordPeak(it) {
+  if (!it || !it.data || !it.data.length) return null;
+  let max = -Infinity;
+  for (let i = 0; i < it.data.length; i++) {
+    const v = currentFromRaw(it.data[i]);
+    if (v > max) max = v;
+  }
+  return isFinite(max) ? max : null;
+}
+
+/** 打开某条历史记录 */
+function openHistoryRecord(id) {
+  const list = getHistoryList();
+  if (!list.some(it => it.id === id)) return;
+  historyDeviceFilter = '';
+  const sel = $('histDeviceFilter');
+  if (sel) sel.value = '';
+  compareIds = [id];
+  selectedHistoryId = id;
+  historyTopId = list[0].id;
+  setActiveNav('navHistory');
+  showHistoryPage();
+}
+
+/** 峰值趋势迷你图（内联 SVG，避免再起一个 ECharts 实例） */
+function buildSparkSvg(values) {
+  const n = values.length;
+  const W = 320, H = 120, PAD_L = 6, PAD_R = 6, PAD_T = 12, PAD_B = 16;
+  const min = Math.min.apply(null, values);
+  const max = Math.max.apply(null, values);
+  const span = (max - min) || 1;
+  const px = i => PAD_L + (n === 1 ? (W - PAD_L - PAD_R) / 2 : i * (W - PAD_L - PAD_R) / (n - 1));
+  const py = v => PAD_T + (1 - (v - min) / span) * (H - PAD_T - PAD_B);
+
+  const pts = values.map((v, i) => [px(i), py(v)]);
+  const line = pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  const area = 'M' + pts[0][0].toFixed(1) + ',' + (H - PAD_B) +
+    ' L' + pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' L') +
+    ' L' + pts[n - 1][0].toFixed(1) + ',' + (H - PAD_B) + ' Z';
+
+  const dots = pts.map(p =>
+    '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) +
+    '" r="3" fill="#fff" stroke="#1677ff" stroke-width="2"/>').join('');
+
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+    '<defs><linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="#1677ff" stop-opacity=".20"/>' +
+      '<stop offset="100%" stop-color="#1677ff" stop-opacity="0"/>' +
+    '</linearGradient></defs>' +
+    '<path d="' + area + '" fill="url(#sparkFill)"/>' +
+    '<polyline points="' + line + '" fill="none" stroke="#1677ff" stroke-width="2.2" ' +
+      'stroke-linecap="round" stroke-linejoin="round"/>' +
+    dots +
+  '</svg>';
+}
+
+/** 刷新首页所有区块 */
+function renderHomeOverview() {
+  const all = getHistoryList();
+  const runs = all.filter(it => it.taskType === '检测任务');
+  const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+
+  set('homeRuns', String(runs.length));
+  set('homeDevices', String(deviceList.length));
+
+  const active = getActiveDevice();
+  set('homeActiveDevice', active ? active.name : '--');
+
+  set('homeHisMeta', all.length ? all.length + ' 条记录' : '暂无记录');
+
+  // 最近检测（最多 3 条）
+  const box = $('homeRecent');
+  if (box) {
+    if (!all.length) {
+      box.innerHTML = '<div class="home-empty">还没有检测记录</div>';
+    } else {
+      box.innerHTML = all.slice(0, 5).map(function (it) {
+        const peak = recordPeak(it);
+        const isClean = it.taskType === '清洁任务';
+        return '<div class="hr-item" onclick="openHistoryRecord(' + it.id + ')">' +
+          '<span class="hr-dot' + (isClean ? ' clean' : '') + '"></span>' +
+          '<div class="hr-main">' +
+            '<div class="hr-title">' + escapeHtml(it.taskType) +
+              (it.deviceName ? '<em>' + escapeHtml(it.deviceName) + '</em>' : '') +
+            '</div>' +
+            '<div class="hr-sub">' + escapeHtml(it.time || '') + '</div>' +
+          '</div>' +
+          '<div class="hr-val">' + (peak === null ? '--' : peak.toFixed(2)) +
+            '<span>μA</span></div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // 当前检测参数
+  const pbox = $('homeParams');
+  if (pbox) {
+    const val = id => { const el = $(id); return el ? el.value : ''; };
+    const items = [
+      { k: '起始电位', v: val('m_p1'), u: 'V' },
+      { k: '终止电位', v: val('m_p2'), u: 'V' },
+      { k: '脉冲高度', v: val('m_p6'), u: 'V' },
+      { k: '步进电位', v: val('m_p5'), u: 'V' },
+      { k: '沉积电位', v: val('m_p3'), u: 'V' },
+      { k: '沉积时间', v: val('m_p4'), u: 's' },
+      { k: '增益电阻', v: val('m_p8'), u: 'KΩ' },
+      { k: '方波频率', v: val('m_p7'), u: 'Hz' }
+    ];
+    pbox.innerHTML = items.map(function (it) {
+      return '<div class="pc"><span class="k">' + it.k + '</span>' +
+        '<span class="v">' + escapeHtml(String(it.v || '--')) + '</span>' +
+        '<span class="u">' + it.u + '</span></div>';
+    }).join('');
+  }
+
+  // 最近一次结果：各金属浓度条
+  const rbox = $('homeResult');
+  const rinfo = $('homeResultInfo');
+  if (rbox) {
+    if (!runs.length) {
+      rbox.innerHTML = '<div class="home-empty">暂无检测结果</div>';
+      if (rinfo) rinfo.textContent = '';
+    } else {
+      const rows = speciesRowsOfHistory(runs[0]);
+      const hit = rows.filter(r => r.concentration !== null &&
+        r.concentration !== undefined && r.concentration !== '未检出');
+      if (!hit.length) {
+        rbox.innerHTML = '<div class="home-empty">本次未检出重金属</div>';
+      } else {
+        const nums = hit.map(r => Number(r.concentration) || 0);
+        const top = Math.max.apply(null, nums) || 1;
+        rbox.innerHTML = hit.map(function (r, i) {
+          const w = Math.max(6, (nums[i] / top) * 100);
+          return '<div class="hs-row">' +
+            '<span class="hs-name">' + escapeHtml(r.species) + '</span>' +
+            '<span class="hs-bar"><i style="width:' + w.toFixed(1) + '%"></i></span>' +
+            '<span class="hs-val">' + Number(r.concentration).toFixed(2) + '</span>' +
+          '</div>';
+        }).join('') +
+        '<div class="hs-none">单位 mg/kg · 按本次最高值归一</div>';
+      }
+      if (rinfo) rinfo.textContent = runs[0].time || '';
+    }
+  }
+
+  // 峰值趋势：最近 12 次检测
+  const spark = $('homeSpark');
+  const info = $('homeSparkInfo');
+  if (spark) {
+    const series = runs.slice(0, 12).reverse()
+      .map(recordPeak).filter(v => v !== null);
+    if (!series.length) {
+      spark.innerHTML = '<div class="home-empty">暂无检测数据</div>';
+      if (info) info.textContent = '';
+    } else {
+      spark.innerHTML = buildSparkSvg(series) +
+        '<div class="hs-axis"><span>' + Math.min.apply(null, series).toFixed(2) + '</span>' +
+        '<span>' + Math.max.apply(null, series).toFixed(2) + ' μA</span></div>';
+      if (info) info.textContent = '最近 ' + series.length + ' 次';
+    }
+  }
+}
+
+/** 侧边栏"主界面" */
+function navHome() {
+  backToHome();
+}
+
+/** 侧边栏"检测任务"：未连接时由 selectMode 给出提示 */
+function navDetect() {
+  cancelAutoReturn();
+  setActiveNav('navDetect');
+  selectMode('DETECTION');
+}
+/** 侧边栏"清洁任务" */
+function navClean() {
+  cancelAutoReturn();
+  setActiveNav('navClean');
+  selectMode('CLEAN');
+}
+/** 侧边栏"历史记录" */
+function navHistory() {
+  cancelAutoReturn();
+  setActiveNav('navHistory');
+  showHistoryPage();
+}
+
+/* 进入各页面时同步导航高亮与顶栏按钮 */
+(function () {
+  const _showDetect = showDetectPage;
+  showDetectPage = function () { _showDetect.apply(this, arguments); setActiveNav('navDetect'); };
+  const _showHistory = showHistoryPage;
+  showHistoryPage = function () { _showHistory.apply(this, arguments); setActiveNav('navHistory'); };
+  const _showHome = showHome;
+  showHome = function () { _showHome.apply(this, arguments); setActiveNav('navHome'); };
+})();
+
+</script>
+</body>
+</html>
