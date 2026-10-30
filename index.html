@@ -945,6 +945,7 @@ body {
   #historyPage,
   #devicePage,
   #paramPage,
+  .home-hero,
   .overlay { animation: none; }
 }
 
@@ -1033,9 +1034,15 @@ body {
   border: 1px solid rgba(255, 255, 255, .18);
   border-radius: var(--r-lg);
   background:
-    radial-gradient(120% 190% at 92% 0%, rgba(255, 255, 255, .28) 0%, rgba(255, 255, 255, 0) 55%),
-    linear-gradient(115deg, #1677ff 0%, #3f6bff 42%, #7a5af8 100%);
-  box-shadow: 0 10px 26px rgba(48, 92, 220, .28);
+    radial-gradient(120% 190% at 92% 0%, rgba(255, 255, 255, .30) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(115deg, #1677ff 0%, #3f6bff 38%, #6d5bf5 68%, #7a5af8 100%);
+  background-size: 100% 100%, 180% 100%;
+  box-shadow: 0 10px 26px rgba(48, 92, 220, .30);
+  animation: heroFlow 16s ease-in-out infinite;
+}
+@keyframes heroFlow {
+  0%, 100% { background-position: 0 0, 0% 50%; }
+  50%      { background-position: 0 0, 100% 50%; }
 }
 .hh-text h2 {
   margin: 0 0 4px;
@@ -1455,7 +1462,7 @@ body {
 
 /* ---------- 顶部标题栏 ---------- */
 .app-header {
-  background: rgba(255, 255, 255, .88);
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
   backdrop-filter: saturate(180%) blur(12px);
   -webkit-backdrop-filter: saturate(180%) blur(12px);
 }
@@ -1476,7 +1483,7 @@ body {
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Cpath d='M4.5 14.2l3.8-4.8 3 2.9 5.9-6.4' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 15px 15px no-repeat,
     linear-gradient(135deg, #1677ff 0%, #4f9dff 100%);
-  box-shadow: 0 2px 6px rgba(22, 119, 255, .30);
+  box-shadow: 0 3px 10px rgba(22, 119, 255, .38);
 }
 
 /* ---------- 侧边导航 ---------- */
@@ -1502,6 +1509,10 @@ body {
 }
 .nav-btn .ico { opacity: .62; transition: opacity .16s; }
 .nav-btn:hover { background: #f4f7fc; color: var(--ink); }
+#navDetect:hover  { background: rgba(22, 119, 255, .07); color: #1060d8; }
+#navClean:hover   { background: rgba(13, 148, 136, .08); color: #0b7c72; }
+#navHistory:hover { background: rgba(217, 130, 10, .09); color: #a8620a; }
+#navDevice:hover  { background: rgba(122, 90, 248, .08); color: #5b3fd6; }
 .nav-btn:hover .ico { opacity: .85; }
 .nav-btn.active {
   background: var(--brand-soft);
@@ -1514,7 +1525,7 @@ body {
 /* ---------- 页面顶栏 ---------- */
 .topbar {
   min-height: 56px;
-  background: rgba(255, 255, 255, .72);
+  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
   backdrop-filter: saturate(140%) blur(8px);
 }
 .topbar .where h2 {
@@ -1576,11 +1587,20 @@ body {
 /* ---------- 指标格 ---------- */
 .metrics { gap: 10px; padding: 14px 16px 16px; }
 .metric {
+  position: relative;
+  overflow: hidden;
   background: #f8fafd;
   border: 1px solid var(--line-soft);
   border-radius: var(--r);
   padding: 11px 13px;
-  transition: background .16s, border-color .16s;
+  transition: background .16s, border-color .16s, box-shadow .16s;
+}
+.metric::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .75) 0%, rgba(255, 255, 255, 0) 46%);
 }
 .metric:hover { border-color: var(--brand-line); }
 
@@ -1691,7 +1711,8 @@ body {
   border-radius: var(--r-lg);
   transition: border-color .16s, background .16s, box-shadow .16s;
 }
-.hist-item:hover { border-color: var(--brand-line); background: #fbfdff; }
+.hist-item:hover { border-color: var(--brand-line); background: linear-gradient(120deg, #f6faff 0%, #ffffff 70%); }
+.hist-item.clean:hover { border-color: rgba(13, 148, 136, .38); background: linear-gradient(120deg, #f2fbf9 0%, #ffffff 70%); }
 .hist-item.active {
   border-color: var(--brand);
   background: #f7faff;
@@ -1790,7 +1811,12 @@ body {
 }
 
 /* 卡片悬停微抬 */
-.card:hover { box-shadow: 0 6px 20px rgba(22, 119, 255, .10); border-color: #d9e6fb; }
+.card:hover { box-shadow: 0 8px 24px rgba(22, 119, 255, .13); border-color: #cfe0fb; }
+.chart-card:hover  { box-shadow: 0 10px 28px rgba(22, 119, 255, .16); border-color: #c8dcfb; }
+.hm-card:hover     { box-shadow: 0 10px 28px rgba(122, 90, 248, .16); border-color: #d9cffb; }
+.stats-strip:hover { box-shadow: 0 10px 28px rgba(13, 148, 136, .16); border-color: #c6e9e3; }
+.home-grid > .card:nth-child(1):hover { box-shadow: 0 10px 28px rgba(217, 130, 10, .16); border-color: #f3dcb6; }
+.home-grid > .card:nth-child(3):hover { box-shadow: 0 10px 28px rgba(13, 148, 136, .16); border-color: #c6e9e3; }
 
 /* 输入框悬停 */
 .field input:hover { border-color: #bcd3ff; background: #fcfdff; }
@@ -3659,14 +3685,16 @@ function baseOption(hex, fill) {
         cap: 'round',
         color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
           { offset: 0, color: hex },
-          { offset: 1, color: '#4f9dff' }
+          { offset: 0.55, color: '#3b8cff' },
+          { offset: 1, color: '#22d3ee' }
         ])
       },
       emphasis: { focus: 'series' },
       areaStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: fillBase + '0.26)' },
-          { offset: 1, color: fillBase + '0.02)' }
+          { offset: 0, color: fillBase + '0.34)' },
+          { offset: 0.55, color: fillBase + '0.10)' },
+          { offset: 1, color: fillBase + '0.00)' }
         ])
       }
     }]
