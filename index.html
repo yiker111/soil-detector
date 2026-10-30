@@ -963,7 +963,8 @@ body {
 #detectPage,
 #historyPage,
 #devicePage,
-#paramPage {
+#paramPage,
+#cleanPage {
   animation: pageEnter .18s cubic-bezier(.2, .8, .3, 1);
 }
 @keyframes pageEnter {
@@ -985,7 +986,9 @@ body {
   #historyPage,
   #devicePage,
   #paramPage,
+  #cleanPage,
   .home-hero,
+  .clean-hero,
   .overlay { animation: none; }
 }
 
@@ -1881,10 +1884,89 @@ body {
 *::-webkit-scrollbar-thumb { background: #c7d6ec; background-clip: content-box; }
 *::-webkit-scrollbar-thumb:hover { background: #a9c0e2; background-clip: content-box; }
 
+/* ===================== 清洁结果页 ===================== */
+#cleanPage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.clean-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 22px 26px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 190% at 92% 0%, rgba(255, 255, 255, .28) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(115deg, #0d9488 0%, #14a89a 45%, #2bb3a3 100%);
+  background-size: 100% 100%, 180% 100%;
+  box-shadow: 0 10px 26px rgba(13, 148, 136, .28);
+  animation: heroFlow 16s ease-in-out infinite;
+}
+.ch-main { display: flex; align-items: center; gap: 18px; }
+.ch-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 99px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  color: #0b7c72;
+  background: #fff;
+  border: 1px solid #fff;
+}
+.ch-badge.run { color: #fff; background: rgba(255, 255, 255, .2); border-color: rgba(255, 255, 255, .45); }
+.ch-badge.done { color: #0b7c72; background: #fff; }
+.ch-timer {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 38px;
+  font-weight: 650;
+  letter-spacing: -1px;
+  color: #fff;
+  line-height: 1;
+}
+.ch-stats { display: flex; align-items: stretch; }
+.ch-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 22px;
+  border-left: 1px solid rgba(255, 255, 255, .24);
+}
+.ch-item:first-child { border-left: none; }
+.ch-item .k { font-size: 11.5px; color: rgba(255, 255, 255, .74); letter-spacing: .3px; }
+.ch-item .v { font-size: 14px; font-weight: 600; color: #fff; }
+.ch-item .v.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.2px; }
+
+.clean-card { flex: none; }
+.clean-card::before { background: linear-gradient(90deg, #0d9488, #2bb3a3); }
+/* 清洗参数：4 列规格表，比横排条目更有分量 */
+#cleanParams {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 22px 26px;
+  padding: 26px 26px 28px;
+}
+#cleanParams .pc { flex-direction: column; align-items: flex-start; gap: 6px; }
+#cleanParams .pc .k { font-size: 12px; }
+#cleanParams .pc .v { font-size: 19px; font-weight: 650; letter-spacing: -.3px; }
+#cleanParams .pc .u { font-size: 11.5px; }
+
 /* ===================== 响应式 ===================== */
 @media (max-width: 1180px) {
   #detectPage { min-height: 0; }
   .hh-conn { padding-left: 0; border-left: none; }
+  .clean-hero { padding: 16px 18px; gap: 14px; }
+  #cleanParams { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 16px 16px 18px; }
+  .clean-hero .ch-timer { font-size: 30px; }
+  .ch-stats { flex-wrap: wrap; gap: 10px 0; }
+  .ch-item { padding: 0 14px; }
   .run-strip { padding: 12px 14px; gap: 10px 0; }
   .rs-item { padding: 0 14px; }
   .focus-grid { grid-template-columns: minmax(0, 1fr); }
@@ -2374,6 +2456,44 @@ body {
           <button type="button" id="btnStart" class="btn btn-primary btn-run" onclick="startTask()">开始检测</button>
         </div>
       </div>
+
+      <!-- ---------- 清洁结果页 ---------- -->
+      <div id="cleanPage" class="hidden">
+        <section class="clean-hero">
+          <div class="ch-main">
+            <span class="ch-badge" id="cleanBadge">未开始</span>
+            <div class="ch-timer" id="cleanTimer">00:00</div>
+          </div>
+          <div class="ch-stats">
+            <div class="ch-item">
+              <span class="k">当前设备</span>
+              <span class="v" id="cleanDevice">--</span>
+            </div>
+            <div class="ch-item">
+              <span class="k">已收报文</span>
+              <span class="v mono" id="cleanFrames">0</span>
+            </div>
+            <div class="ch-item">
+              <span class="k">最后回传</span>
+              <span class="v mono" id="cleanLast">--</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card clean-card">
+          <div class="card-head">
+            <h3>清洗参数</h3>
+          </div>
+          <div class="param-chips" id="cleanParams"></div>
+        </section>
+
+        <div class="param-actions">
+          <button type="button" class="btn btn-cancel" onclick="backToHome()">返回主界面</button>
+          <button type="button" class="btn btn-primary btn-run" id="btnCleanCancel"
+            onclick="cancelClean()">取消清洗</button>
+        </div>
+      </div>
+
 
     </div>
   </div>
@@ -3385,6 +3505,7 @@ function showHome() {
   $('historyPage').classList.add('hidden');
   $('devicePage').classList.add('hidden');
   $('paramPage').classList.add('hidden');
+  $('cleanPage').classList.add('hidden');
   setPageHeader('主界面');
   syncHomeBtn(true);
 }
@@ -3395,6 +3516,7 @@ function showDetectPage() {
   $('historyPage').classList.add('hidden');
   $('devicePage').classList.add('hidden');
   $('paramPage').classList.add('hidden');
+  $('cleanPage').classList.add('hidden');
   setPageHeader('检测任务');
   syncHomeBtn(false);
   try { renderRunStrip(); } catch (e) { /* 摘要条缺失不影响主流程 */ }
@@ -3408,6 +3530,7 @@ function showHistoryPage() {
   $('historyPage').classList.remove('hidden');
   $('devicePage').classList.add('hidden');
   $('paramPage').classList.add('hidden');
+  $('cleanPage').classList.add('hidden');
   setPageHeader('历史记录');
   syncHomeBtn(false);
   // 图表初始化失败（例如 echarts 未加载）不应阻断下面的列表与读数
@@ -3591,12 +3714,159 @@ function startTask() {
     renderDepositTime(p.depositS);
     // 记下本次沉积时间，保存历史记录时一并写入（清洁任务无参数，置空）
     activeDepositS = (Number(p.depositS) || null);
-    openWaiting(cfg.label);
+    if (currentTask === 'CLEAN') {
+      // 清洁任务进入独立结果页，用页面计时替代等待弹窗
+      startCleanSession();
+    } else {
+      openWaiting(cfg.label);
+    }
     // 指令帧为纯 ASCII，GBK 与 UTF-8 字节相同，统一走 GBK 通道
     sendCmdGbk(frame);
   });
 }
 
+
+/* =====================================================================
+ * 清洁结果页
+ * ---------------------------------------------------------------------
+ * 发起清洁后进入本页：实时计时、统计回传、按结束符判定完成。
+ * 期间收到的数据只用于状态与落库，不切到检测结果页。
+ * ===================================================================*/
+let cleanRunning = false;      // 清洁进行中
+let cleanSaved = false;        // 本轮是否已写入历史
+let cleanFrameCount = 0;       // 已收报文数
+let cleanStartedAt = 0;        // 开始时间戳
+let cleanLastAt = null;        // 最后一次回传
+let cleanTimerId = 0;
+
+/** 秒数格式化为 mm:ss（超过 1 小时显示 h:mm:ss） */
+function formatElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const p2 = n => (n < 10 ? '0' : '') + n;
+  return h > 0 ? (h + ':' + p2(m) + ':' + p2(s)) : (p2(m) + ':' + p2(s));
+}
+
+/** 刷新清洁页上的状态数值 */
+function updateCleanInfo() {
+  const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+  const dev = getActiveDevice();
+  set('cleanDevice', dev ? dev.name : '--');
+  set('cleanFrames', String(cleanFrameCount));
+  set('cleanLast', cleanLastAt ? cleanLastAt.toLocaleTimeString() : '--');
+
+  const timer = $('cleanTimer');
+  if (timer) {
+    timer.textContent = cleanStartedAt
+      ? formatElapsed((cleanRunning ? Date.now() : cleanEndedAt) - cleanStartedAt)
+      : '00:00';
+  }
+}
+
+let cleanEndedAt = 0;
+
+/** 打开清洁结果页 */
+function showCleanPage() {
+  resetScrollIfSwitching('cleanPage');
+  $('homePage').classList.add('hidden');
+  $('detectPage').classList.add('hidden');
+  $('historyPage').classList.add('hidden');
+  $('devicePage').classList.add('hidden');
+  $('paramPage').classList.add('hidden');
+  $('cleanPage').classList.remove('hidden');
+  setPageHeader('清洁任务');
+  syncHomeBtn(false);
+  setActiveNav('navClean');
+  renderCleanParams();
+  updateCleanInfo();
+}
+
+/** 把当前清洗参数渲染成横向条目 */
+function renderCleanParams() {
+  const box = $('cleanParams');
+  if (!box) return;
+  const val = id => { const el = $(id); return el ? el.value : ''; };
+  const items = [
+    { k: '起始电位', v: val('m_p1'), u: 'V' },
+    { k: '终止电位', v: val('m_p2'), u: 'V' },
+    { k: '脉冲高度', v: val('m_p6'), u: 'V' },
+    { k: '步进电位', v: val('m_p5'), u: 'V' },
+    { k: '沉积电位', v: val('m_p3'), u: 'V' },
+    { k: '沉积时间', v: val('m_p4'), u: 's' },
+    { k: '增益电阻', v: val('m_p8'), u: 'KΩ' },
+    { k: '方波频率', v: val('m_p7'), u: 'Hz' }
+  ];
+  box.innerHTML = items.map(function (it) {
+    return '<div class="pc"><span class="k">' + it.k + '</span>' +
+      '<span class="v">' + escapeHtml(String(it.v || '--')) + '</span>' +
+      '<span class="u">' + it.u + '</span></div>';
+  }).join('');
+}
+
+/** 切换状态徽标 */
+function setCleanBadge(text, cls) {
+  const badge = $('cleanBadge');
+  if (!badge) return;
+  badge.textContent = text;
+  badge.className = 'ch-badge' + (cls ? ' ' + cls : '');
+}
+
+/** 开始一轮清洁会话 */
+function startCleanSession() {
+  cleanRunning = true;
+  cleanSaved = false;
+  cleanFrameCount = 0;
+  cleanStartedAt = Date.now();
+  cleanEndedAt = 0;
+  cleanLastAt = null;
+
+  setCleanBadge('清洗中', 'run');
+  const btn = $('btnCleanCancel');
+  if (btn) { btn.textContent = '取消清洗'; btn.classList.remove('hidden'); }
+  showCleanPage();
+
+  if (cleanTimerId) clearInterval(cleanTimerId);
+  cleanTimerId = setInterval(function () {
+    if (!cleanRunning) return;
+    updateCleanInfo();
+  }, 1000);
+}
+
+/** 结束清洁会话 */
+function finishClean(text, cls) {
+  cleanRunning = false;
+  cleanEndedAt = Date.now();
+  if (cleanTimerId) { clearInterval(cleanTimerId); cleanTimerId = 0; }
+  setCleanBadge(text, cls || '');
+  const btn = $('btnCleanCancel');
+  if (btn) btn.textContent = '返回主界面';
+  updateCleanInfo();
+}
+
+/** 取消清洗：下发取消帧并结束会话 */
+function cancelClean() {
+  if (!cleanRunning) { backToHome(); return; }
+  try { sendCmdGbk(PROTOCOL.cancelFrame); } catch (e) { console.warn('[clean] 取消帧发送失败：' + e.message); }
+  finishClean('已取消', '');
+}
+
+/** 收到清洁期间的数据帧 */
+function handleCleanFrame(nums, parsed) {
+  cleanFrameCount++;
+  cleanLastAt = new Date();
+  updateCleanInfo();
+
+  try {
+    if (!cleanSaved) { saveHistory(nums, '清洁任务'); cleanSaved = true; }
+    else if (!replaceRecentHistory(nums)) saveHistory(nums, '清洁任务');
+  } catch (e) {
+    console.warn('[clean] 落库失败：' + e.message);
+  }
+
+  if (parsed && parsed.hasTerminator) finishClean('已完成', 'done');
+}
 
 /* =====================================================================
  * 沉积时间显示（曲线右上角）
@@ -4064,6 +4334,13 @@ function parseData(raw) {
   if (scan.start !== scan.end && nums.length > 1) {
     const step = (scan.end - scan.start) / (PROTOCOL.sampleFirstPoint ? nums.length - 1 : nums.length);
     if (step > 0) scan = Object.assign({}, scan, { step });
+  }
+
+  // 清洁任务的数据帧只更新清洁页，不进入检测结果页
+  if (cleanRunning) {
+    try { closeWaiting(); } catch (e) {}
+    handleCleanFrame(nums, parsed);
+    return;
   }
 
   // 收到任何有效数据帧都关闭等待弹窗并切到结果页
@@ -4858,6 +5135,7 @@ function showParamPage(task) {
     if (el) el.classList.add('hidden');
   });
   $('paramPage').classList.remove('hidden');
+  $('cleanPage').classList.add('hidden');
   syncHomeBtn(false);
   // 先定导航高亮（它会顺带改标题），再覆盖成本页标题，避免被覆盖
   setActiveNav(task === 'CLEAN' ? 'navClean' : 'navDetect');
@@ -5111,6 +5389,7 @@ function showDevicePage() {
   $('historyPage').classList.add('hidden');
   $('devicePage').classList.remove('hidden');
   $('paramPage').classList.add('hidden');
+  $('cleanPage').classList.add('hidden');
   setPageHeader('设备管理');
   syncHomeBtn(false);
   renderDeviceList();
