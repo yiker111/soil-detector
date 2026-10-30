@@ -1356,16 +1356,6 @@ body {
 }
 
 
-/* 波形预览 */
-.wave-card { flex: none; display: flex; flex-direction: column; }
-.wave-card::before { background: linear-gradient(90deg, #22d3ee, #1677ff 55%, #7a5af8); }
-.wave-box {
-  height: 300px;
-  padding: 10px 18px 6px;
-  display: flex;
-  align-items: center;
-}
-.wave-box svg { width: 100%; height: 100%; display: block; }
 
 /* 底部操作条：居中，主按钮放大突出 */
 .param-actions {
@@ -1423,7 +1413,6 @@ body {
   .param-grid { grid-template-columns: minmax(0, 1fr); }
   #paramPage { min-height: 0; }
   #paramForm { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .wave-card { min-height: 180px; }
 }
 @media (max-width: 780px) {
   #paramForm { grid-template-columns: minmax(0, 1fr); }
@@ -2339,14 +2328,6 @@ body {
 
         </div>
 
-        <!-- 波形预览：随参数实时重绘 -->
-        <section class="card wave-card">
-          <div class="card-head">
-            <h3>波形预览</h3>
-            <span class="acq-info" id="waveInfo"></span>
-          </div>
-          <div class="wave-box" id="paramWave"></div>
-        </section>
 
         <div class="param-actions">
           <button type="button" class="btn btn-cancel" onclick="closeParamPage()">取消</button>
@@ -4783,100 +4764,6 @@ const PARAM_DEFAULTS = {
   m_p3: '-1.2', m_p4: '200', m_p8: '10', m_p7: '25'
 };
 
-/** 参数页是从哪个页面进来的，取消时回到那里 */
-let paramFromPage = 'homePage';
-
-/**
- * 绘制 SWV 阶梯脉冲波形预览。
- * 横轴 = 扫描进程，纵轴 = 电位（V）；每阶一个步进，阶上方波代表脉冲高度。
- */
-function renderParamWave() {
-  const box = $('paramWave');
-  const info = $('waveInfo');
-  if (!box) return;
-
-  const p = currentParams();
-  const start = p.startMv / PROTOCOL.voltScale;
-  const end = p.endMv / PROTOCOL.voltScale;
-  const step = Math.abs(p.stepMv) / PROTOCOL.voltScale;
-  const pulse = Math.abs(p.pulseMv) / PROTOCOL.voltScale;
-
-  if (!(step > 0) || !(end > start) || !isFinite(pulse)) {
-    box.innerHTML = '';
-    if (info) info.textContent = '';
-    return;
-  }
-
-  const total = Math.round((end - start) / step);
-  const n = Math.max(6, Math.min(56, total));
-
-  const W = 900, H = 260;
-  const PL = 62, PR = 24, PT = 26, PB = 34;
-  const plotW = W - PL - PR;
-  const plotH = H - PT - PB;
-
-  const vMin = start - pulse * 0.35;
-  const vMax = end + pulse * 1.35;
-  const yOf = v => PT + (1 - (v - vMin) / (vMax - vMin)) * plotH;
-  const dx = plotW / n;
-
-  let d = '';
-  for (let i = 0; i < n; i++) {
-    const base = start + ((end - start) * i) / n;
-    const x0 = PL + i * dx;
-    const x1 = x0 + dx * 0.46;
-    const x2 = x1 + dx * 0.20;
-    const x3 = x2 + dx * 0.34;
-    d += (i === 0 ? 'M' + x0.toFixed(1) + ',' + yOf(base).toFixed(1)
-                  : 'L' + x0.toFixed(1) + ',' + yOf(base).toFixed(1));
-    d += ' L' + x1.toFixed(1) + ',' + yOf(base).toFixed(1);
-    d += ' L' + x1.toFixed(1) + ',' + yOf(base + pulse).toFixed(1);
-    d += ' L' + x2.toFixed(1) + ',' + yOf(base + pulse).toFixed(1);
-    d += ' L' + x2.toFixed(1) + ',' + yOf(base).toFixed(1);
-    d += ' L' + x3.toFixed(1) + ',' + yOf(base).toFixed(1);
-  }
-
-  const baseY = yOf(vMin).toFixed(1);
-  const area = d + ' L' + (PL + plotW).toFixed(1) + ',' + baseY + ' L' + PL + ',' + baseY + ' Z';
-
-  let grid = '';
-  for (let i = 1; i < 4; i++) {
-    const x = PL + (plotW * i) / 4;
-    grid += '<line x1="' + x.toFixed(1) + '" y1="' + PT + '" x2="' + x.toFixed(1) +
-      '" y2="' + (PT + plotH) + '" stroke="#eef2f8" stroke-dasharray="3 4"/>';
-  }
-
-  const label = (v, y) =>
-    '<text x="' + (PL - 10) + '" y="' + y.toFixed(1) + '" text-anchor="end" ' +
-    'font-family="ui-monospace, Consolas, monospace" font-size="11.5" fill="#94a3b8">' +
-    v.toFixed(2) + '</text>';
-
-  box.innerHTML =
-    '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
-      '<defs>' +
-        '<linearGradient id="waveLine" x1="0" y1="0" x2="1" y2="0">' +
-          '<stop offset="0%" stop-color="#22d3ee"/>' +
-          '<stop offset="55%" stop-color="#1677ff"/>' +
-          '<stop offset="100%" stop-color="#7a5af8"/>' +
-        '</linearGradient>' +
-        '<linearGradient id="waveFill" x1="0" y1="0" x2="0" y2="1">' +
-          '<stop offset="0%" stop-color="#1677ff" stop-opacity=".22"/>' +
-          '<stop offset="100%" stop-color="#1677ff" stop-opacity="0"/>' +
-        '</linearGradient>' +
-      '</defs>' +
-      grid +
-      '<path d="' + area + '" fill="url(#waveFill)"/>' +
-      '<path d="' + d + '" fill="none" stroke="url(#waveLine)" stroke-width="2" ' +
-        'stroke-linejoin="round" stroke-linecap="round"/>' +
-      label(start, yOf(start)) +
-      label(end, yOf(end)) +
-      '<text x="' + (PL + plotW / 2) + '" y="' + (H - 8) + '" text-anchor="middle" ' +
-        'font-size="11.5" fill="#94a3b8">电位 (V)</text>' +
-    '</svg>';
-
-  if (info) info.textContent = n + ' × 脉冲';
-}
-
 /** 刷新运行信息（当前设备 / 预计点数 / 扫描范围 / 沉积时间） */
 function refreshParamInfo() {
   const cfg = PROTOCOL.task[currentTask];
@@ -4894,8 +4781,6 @@ function refreshParamInfo() {
   set('paramPoints', n > 0 ? String(n) : '--');
   set('paramRange', start + ' ~ ' + end + ' V');
   set('paramDeposit', p.depositS > 0 ? p.depositS + ' s' : '--');
-
-  renderParamWave();
 }
 
 /** 打开参数页 */
