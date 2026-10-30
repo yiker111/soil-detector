@@ -1355,13 +1355,6 @@ body {
   color: var(--ink-4);
 }
 
-/* 清洁任务没有参数：收成单列居中，只留指令预览与运行信息 */
-#paramPage.is-clean .param-grid {
-  grid-template-columns: minmax(0, 720px);
-  justify-content: center;
-}
-#paramPage.is-clean .param-grid > .card:first-child { display: none; }
-#paramPage.is-clean .param-side { gap: 16px; }
 
 /* 底部操作条：居中，主按钮放大突出 */
 .param-actions {
@@ -2315,9 +2308,6 @@ body {
                 <div class="field"><label>方波频率 (Hz)</label><input id="m_p7" type="number" value="25" data-preview></div>
               </div>
 
-              <div id="paramNoParams" class="param-no-params hidden">
-                清洁任务使用固定指令，不携带参数。
-              </div>
 
             </div>
           </section>
@@ -2420,7 +2410,7 @@ const PROTOCOL = {
    * -------------------------------------------------------------------*/
   task: {
     DETECTION: { head: '@M0@S', tail: '&@W', label: '检测任务', action: '开始检测', withParams: true },
-    CLEAN:     { head: '@M5@W', tail: '',     label: '清洁任务', action: '开始清洁', withParams: false }
+    CLEAN:     { head: '@M5@S', tail: '&@W', label: '清洁任务', action: '开始清洁', withParams: true }
   },
   /* 取消帧：手册未给出停止指令。
    * 注意不能用 @W 开头 —— @W 本身是"启动 SWV"，会把取消变成再启动一次。
@@ -2599,7 +2589,7 @@ loadDeviceList();
  * 因此页面部署到 https 后，自动把当前设备切到 wss，并同步默认端口。
  * ===================================================================*/
 function ensureSecureTransport() {
-  if (location.protocol !== 'https:') return;
+  if (typeof location === 'undefined' || location.protocol !== 'https:') return;
   const d = getActiveDevice();
   if (!d || d.useTLS) return;
   d.useTLS = true;
@@ -3544,7 +3534,7 @@ function startTask() {
     // 曲线右上角显示本次的沉积时间
     renderDepositTime(p.depositS);
     // 记下本次沉积时间，保存历史记录时一并写入（清洁任务无参数，置空）
-    activeDepositS = (cfg.withParams === false) ? null : (Number(p.depositS) || null);
+    activeDepositS = (Number(p.depositS) || null);
     openWaiting(cfg.label);
     // 指令帧为纯 ASCII，GBK 与 UTF-8 字节相同，统一走 GBK 通道
     sendCmdGbk(frame);
@@ -3745,7 +3735,7 @@ function toggleConnect() {
   if (!checkLibs()) return;
 
   // https 页面不允许 ws://，这里兜底拦截并提示
-  if (location.protocol === 'https:' && !MQTT_CONFIG.useTLS) {
+  if (typeof location !== 'undefined' && location.protocol === 'https:' && !MQTT_CONFIG.useTLS) {
     showTip('需要使用加密连接', '当前页面通过 HTTPS 打开，请在「设备管理」中勾选「使用加密连接」，端口一般为 8084。');
     return;
   }
@@ -4785,19 +4775,13 @@ function refreshParamInfo() {
   const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
   set('paramDevice', dev ? dev.name : '--');
 
-  if (cfg.withParams === false) {
-    set('paramPoints', '--');
-    set('paramRange', '--');
-    set('paramDeposit', '--');
-  } else {
-    const start = p.startMv / PROTOCOL.voltScale;
-    const end = p.endMv / PROTOCOL.voltScale;
-    const step = p.stepMv / PROTOCOL.voltScale;
-    const n = (step > 0 && end !== start) ? Math.round((end - start) / step) : 0;
-    set('paramPoints', n > 0 ? String(n) : '--');
-    set('paramRange', start + ' ~ ' + end + ' V');
-    set('paramDeposit', p.depositS > 0 ? p.depositS + ' s' : '--');
-  }
+  const start = p.startMv / PROTOCOL.voltScale;
+  const end = p.endMv / PROTOCOL.voltScale;
+  const step = p.stepMv / PROTOCOL.voltScale;
+  const n = (step > 0 && end !== start) ? Math.round((end - start) / step) : 0;
+  set('paramPoints', n > 0 ? String(n) : '--');
+  set('paramRange', start + ' ~ ' + end + ' V');
+  set('paramDeposit', p.depositS > 0 ? p.depositS + ' s' : '--');
 }
 
 /** 打开参数页 */
@@ -4832,20 +4816,9 @@ function showParamPage(task) {
   const btn = $('btnStart');
   if (btn) btn.textContent = cfg.action;
 
-  // 清洁任务没有参数，隐藏表单
+  // 检测与清洁都使用同一套参数表单
   const form = $('paramForm');
-  const note = $('paramNoParams');
-  const h = cfg.withParams === false;
-  if (form) form.classList.toggle('hidden', h);
-  if (note) note.classList.toggle('hidden', !h);
-  // 清洁任务没有参数：隐藏"恢复默认"和三项参数指标
-  ['btnResetParams', 'pmPoints', 'pmRange', 'pmDeposit'].forEach(function (id) {
-    const el = $(id);
-    if (el) el.classList.toggle('hidden', h);
-  });
-  // 清洁任务收成单列居中
-  const pp = $('paramPage');
-  if (pp) pp.classList.toggle('is-clean', h);
+  if (form) form.classList.remove('hidden');
 
   // 表单输入实时刷新预览
   if (!showParamPage._bound) {
