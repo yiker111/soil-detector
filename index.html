@@ -1103,6 +1103,26 @@ body {
   padding: 4px 0 8px;
 }
 
+/* 超标行：名称、数值、进度条同步转红 */
+.hs-row.over .hs-name { color: var(--red); }
+.hs-row.over .hs-bar i {
+  background: linear-gradient(90deg, #f87171, #dc2626);
+}
+.hs-row.over .hs-val {
+  color: var(--red);
+  font-weight: 750;
+}
+/* 数值后面的限值小字 */
+.hs-lim {
+  display: block;
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #ef4444;
+  opacity: .85;
+}
+
 .home-hero {
   display: flex;
   align-items: center;
@@ -6164,15 +6184,21 @@ function renderHomeOverview() {
       } else {
         const nums = hit.map(r => Number(r.concentration) || 0);
         const top = Math.max.apply(null, nums) || 1;
+        const anyOver = hit.some(function (r) { return isOverLimit(r); });
         rbox.innerHTML = hit.map(function (r, i) {
           const w = Math.max(6, (nums[i] / top) * 100);
-          return '<div class="hs-row">' +
+          const over = isOverLimit(r);
+          const th = thresholdOf(r.symbol);
+          return '<div class="hs-row' + (over ? ' over' : '') + '"' +
+              (over && th !== null ? ' title="限值 ' + th.toFixed(2) + ' mg/kg"' : '') + '>' +
             '<span class="hs-name">' + escapeHtml(r.species) + '</span>' +
             '<span class="hs-bar"><i style="width:' + w.toFixed(1) + '%"></i></span>' +
-            '<span class="hs-val">' + Number(r.concentration).toFixed(2) + '</span>' +
+            '<span class="hs-val">' + Number(r.concentration).toFixed(2) +
+              (over ? '<em class="hs-lim">' + th.toFixed(2) + '</em>' : '') + '</span>' +
           '</div>';
         }).join('') +
-        '<div class="hs-none">单位 mg/kg · 按本次最高值归一</div>';
+        '<div class="hs-none">单位 mg/kg' + (anyOver ? ' · 红色为超限' : '') +
+          ' · 按本次最高值归一</div>';
       }
       if (rinfo) rinfo.textContent = runs[0].time || '';
     }
