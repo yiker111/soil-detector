@@ -630,15 +630,18 @@ body {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
   gap: 14px;
-  align-items: stretch;   /* 左列卡片与右列等高，底部不再留白 */
+  align-items: start;   /* 左列高度自成一体，不跟着右列长高 */
 }
 /* 左列：头部固定，列表占满剩余高度并在内部滚动 */
+/* 左列：高度跟随视口、不随记录数增长；滚动右列时固定在视野里 */
 .hist-grid > .card:first-child {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  align-self: stretch;   /* 与右列等高 */
-  height: 100%;
+  align-self: start;
+  height: calc(100vh - var(--header-h) - 56px - 76px);
+  position: sticky;
+  top: calc(var(--header-h) + 68px);
 }
 .hist-filter {
   display: flex;
@@ -2053,7 +2056,12 @@ body.side-collapsed .nav-btn .ico { width: auto; }
   .rs-item { padding: 0 14px; }
   .focus-grid { grid-template-columns: minmax(0, 1fr); }
   .device-grid { grid-template-columns: minmax(0, 1fr); }
-  .hist-grid { grid-template-columns: minmax(0, 1fr); }
+  .hist-grid { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .hist-grid > .card:first-child {
+    height: auto;
+    position: static;
+    min-height: 0;
+  }
   /* 单列后不再需要内部滚动：整页滚动更自然，卡片也不会被截断 */
   .hist-list {
     max-height: none;
