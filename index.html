@@ -2282,6 +2282,70 @@ body.side-collapsed .nav-btn .ico { width: auto; }
 .hist-item.clean .type::before { background: #0d9488; }
 .hist-item.detect .type::before { background: #1677ff; }
 
+/* ===================== 任务色带（参数页） ===================== */
+.task-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  border-radius: var(--r-lg);
+  color: #fff;
+  background: linear-gradient(115deg, #1677ff 0%, #3f6bff 48%, #7a5af8 100%);
+  box-shadow: 0 8px 22px rgba(48, 92, 220, .24);
+  transition: background .2s ease, box-shadow .2s ease;
+}
+.th-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .20);
+  border: 1px solid rgba(255, 255, 255, .30);
+  color: #fff;
+}
+.th-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.th-main strong { font-size: 16px; font-weight: 650; letter-spacing: .3px; }
+.th-main span { font-size: 12px; color: rgba(255, 255, 255, .78); }
+.th-pill {
+  margin-left: auto;
+  flex: none;
+  padding: 5px 12px;
+  border-radius: 99px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, .18);
+  border: 1px solid rgba(255, 255, 255, .30);
+}
+
+/* 清洁：整条换成青绿 */
+#paramPage.task-clean .task-hero {
+  background: linear-gradient(115deg, #0d9488 0%, #14a89a 50%, #2bb3a3 100%);
+  box-shadow: 0 8px 22px rgba(13, 148, 136, .26);
+}
+
+/* 侧栏激活项按任务着色 */
+.nav-btn#navDetect.active { background: rgba(22, 119, 255, .12); color: #1060d8; }
+.nav-btn#navClean.active  { background: rgba(13, 148, 136, .14); color: #0b7c72; }
+
+/* 顶栏任务色标 */
+.task-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: .4px;
+  color: #fff;
+  background: linear-gradient(135deg, #1677ff, #7a5af8);
+  white-space: nowrap;
+}
+.task-tag.clean { background: linear-gradient(135deg, #0d9488, #2bb3a3); }
+
 /* ===================== 响应式 ===================== */
 @media (max-width: 1180px) {
   #detectPage { min-height: 0; }
@@ -2436,6 +2500,7 @@ body.side-collapsed .nav-btn .ico { width: auto; }
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/></svg> 主界面
         </button>
         <span class="crumb-sep">/</span>
+        <span class="task-tag hidden" id="taskTag">检测</span>
         <h2 id="pageTitle">检测任务</h2>
       </div>
       <div class="top-actions">
@@ -2826,6 +2891,20 @@ body.side-collapsed .nav-btn .ico { width: auto; }
 
       <!-- ---------- 参数设置页 ---------- -->
       <div id="paramPage" class="hidden">
+        <section class="task-hero" id="taskHero">
+          <span class="th-ico" id="taskHeroIco">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+              stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 12h4l2.5-7 4 14 2.5-7h7"/>
+            </svg>
+          </span>
+          <div class="th-main">
+            <strong id="taskHeroTitle">检测任务</strong>
+            <span id="taskHeroSub">参数设置</span>
+          </div>
+          <div class="th-pill"><span id="taskHeroPoints">--</span> 点</div>
+        </section>
+
         <div class="param-grid">
 
           <!-- 参数表单 -->
@@ -4015,6 +4094,7 @@ function showHome() {
   $('paramPage').classList.add('hidden');
   $('cleanPage').classList.add('hidden');
   $('runPage').classList.add('hidden');
+  try { syncTaskTheme(''); } catch (e) {}
   setPageHeader('主界面');
   syncHomeBtn(true);
 }
@@ -4027,6 +4107,7 @@ function showDetectPage() {
   $('paramPage').classList.add('hidden');
   $('cleanPage').classList.add('hidden');
   $('runPage').classList.add('hidden');
+  try { syncTaskTheme(''); } catch (e) {}
   setPageHeader('检测任务');
   syncHomeBtn(false);
   try { renderRunStrip(); } catch (e) { /* 摘要条缺失不影响主流程 */ }
@@ -4042,6 +4123,7 @@ function showHistoryPage() {
   $('paramPage').classList.add('hidden');
   $('cleanPage').classList.add('hidden');
   $('runPage').classList.add('hidden');
+  try { syncTaskTheme(''); } catch (e) {}
   setPageHeader('历史记录');
   syncHomeBtn(false);
   // 图表初始化失败（例如 echarts 未加载）不应阻断下面的列表与读数
@@ -5795,8 +5877,45 @@ function refreshParamInfo() {
   const step = p.stepMv / PROTOCOL.voltScale;
   const n = (step > 0 && end !== start) ? Math.round((end - start) / step) : 0;
   set('paramPoints', n > 0 ? String(n) : '--');
+  set('taskHeroPoints', n > 0 ? String(n) : '--');
   set('paramRange', start + ' ~ ' + end + ' V');
   set('paramDeposit', p.depositS > 0 ? p.depositS + ' s' : '--');
+}
+
+/**
+ * 同步"当前任务"的视觉标识：参数页色带、侧栏高亮色、顶栏色标。
+ * task 为 'DETECTION' / 'CLEAN'，其它值视为无任务。
+ */
+function syncTaskTheme(task) {
+  const isClean = task === 'CLEAN';
+  const isDetect = task === 'DETECTION';
+
+  const hero = $('taskHero');
+  if (hero) hero.classList.toggle('hidden', !(isClean || isDetect));
+
+  const ico = $('taskHeroIco');
+  if (ico) {
+    ico.innerHTML = isClean
+      ? '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" ' +
+        'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M12 3.2 6.9 8.9a7.2 7.2 0 1 0 10.2 0z"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" ' +
+        'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M2 12h4l2.5-7 4 14 2.5-7h7"/></svg>';
+  }
+
+  const title = $('taskHeroTitle');
+  if (title) title.textContent = isClean ? '清洁任务' : '检测任务';
+
+  const sub = $('taskHeroSub');
+  if (sub) sub.textContent = isClean ? '清洗参数设置' : '扫描参数设置';
+
+  const tag = $('taskTag');
+  if (tag) {
+    tag.classList.toggle('hidden', !(isClean || isDetect));
+    tag.classList.toggle('clean', isClean);
+    tag.textContent = isClean ? '清洁' : '检测';
+  }
 }
 
 /** 打开参数页 */
@@ -5823,6 +5942,7 @@ function showParamPage(task) {
   // 检测 / 清洁 用两套主题色，避免两个参数页看起来一样
   $('paramPage').classList.toggle('task-clean', task === 'CLEAN');
   $('paramPage').classList.toggle('task-detect', task !== 'CLEAN');
+  syncTaskTheme(task);
   $('cleanPage').classList.add('hidden');
   $('runPage').classList.add('hidden');
   syncHomeBtn(false);
@@ -6080,6 +6200,7 @@ function showDevicePage() {
   $('paramPage').classList.add('hidden');
   $('cleanPage').classList.add('hidden');
   $('runPage').classList.add('hidden');
+  try { syncTaskTheme(''); } catch (e) {}
   setPageHeader('设备管理');
   syncHomeBtn(false);
   renderDeviceList();
