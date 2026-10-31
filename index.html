@@ -677,6 +677,35 @@ body {
   gap: 10px;
   padding: 10px 14px 0;
 }
+
+/* 历史左列只有 340px：头部与筛选行一律纵向堆叠，
+   避免勾选后"已选 N 条 + 两个按钮"挤在一起导致错位 */
+.hist-grid > .card:first-child .card-head {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 14px;
+}
+.hist-grid > .card:first-child { min-width: 0; overflow: hidden; }
+.hist-grid > .card:first-child .card-head > div {
+  /* 用 flex 占满整行，而不是 width:100% —— 后者会参与最大内容宽度计算，
+     把整张卡片撑宽 */
+  flex: 1 1 100%;
+  min-width: 0;
+  flex-wrap: wrap !important;
+  justify-content: flex-end;
+  gap: 8px !important;
+}
+.hist-grid > .card:first-child .hist-filter {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px 14px 0;
+}
+.hist-grid > .card:first-child .hist-filter-select {
+  width: 100%;
+  max-width: none;
+}
 .hist-filter-hint { font-size: 12px; color: var(--ink-4); }
 .hist-filter-select {
   height: 26px;
