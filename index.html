@@ -6101,13 +6101,14 @@ function navHome() {
 /** 侧边栏"检测任务"：未连接时由 selectMode 给出提示 */
 function navDetect() {
   cancelAutoReturn();
-  setActiveNav('navDetect');
+  // 不在这里改高亮：showParamPage 内部有"未连接"守卫，
+  // 守卫拦下时如果先切了高亮，会出现"内容还是主界面、侧栏却停在检测任务"的错位。
   selectMode('DETECTION');
 }
 /** 侧边栏"清洁任务" */
 function navClean() {
   cancelAutoReturn();
-  setActiveNav('navClean');
+  // 同上：高亮交给 showParamPage，守卫失败时保持原样
   selectMode('CLEAN');
 }
 /** 侧边栏"历史记录" */
