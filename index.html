@@ -488,12 +488,13 @@ body {
 .tbl .conc-cell {
   position: relative;
   overflow: hidden;
+  padding-bottom: 8px;
 }
 .tbl .conc-bar {
   position: absolute;
   left: 10px;
-  bottom: 5px;
-  height: 3px;
+  bottom: 0;
+  height: 2.5px;
   border-radius: 0 99px 99px 0;
   background: linear-gradient(90deg, rgba(22, 119, 255, .55), rgba(34, 211, 238, .30));
   pointer-events: none;
@@ -502,6 +503,32 @@ body {
   background: linear-gradient(90deg, rgba(22, 119, 255, .75), rgba(34, 211, 238, .45));
 }
 .tbl .conc-val { position: relative; }
+
+/* 超标：数值标红 + 限值同步标红 + 整行淡红底 */
+.tbl .conc-cell.over .conc-val {
+  color: var(--red);
+  font-weight: 750;
+}
+
+.tbl tr.over td { background: #fff6f5; }
+.tbl tr.over:hover td { background: #fff0ee; }
+.tbl .conc-lim {
+  display: block;
+  position: relative;
+  margin-top: 1px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ink-5);
+  letter-spacing: .1px;
+  white-space: nowrap;
+}
+/* 浓度列需要容纳"数值 + 限值"两行 */
+.hm-card .tbl th:nth-child(3),
+.hm-card .tbl td:nth-child(3) { min-width: 96px; }
+.tbl .conc-cell.over .conc-lim { color: var(--red); font-weight: 600; }
+.tbl .conc-cell.over .conc-bar {
+  background: linear-gradient(90deg, rgba(217, 45, 32, .78), rgba(248, 113, 113, .45));
+}
 
 /* 指标格顶部细色条 */
 .metric::before {
@@ -3120,6 +3147,38 @@ const HEAVY_METAL_SPECIES = [
  * 再按电位把峰指派给金属，所以这张表只用于"归属判断"，
  * 不再用于"窗口内取最大值"。
  * ===================================================================*/
+/**
+ * 超标判定限值（mg/kg）
+ * ---------------------------------------------------------------------
+ * 取自 GB 15618-2018《农用地土壤污染风险管控标准》风险筛选值，
+ * 这里用 pH 6.5~7.5「其他」一列的数值作为默认阈值：
+ *   Cd 0.30 / Pb 120 / As 30 / Zn 250
+ * 铋（Bi）该标准未收录，暂用内部参考值 5.0。
+ * 现场若按当地标准或土壤 pH 调整，只改这张表即可。
+ * -------------------------------------------------------------------*/
+const THRESHOLD = {
+  Cd: 0.30,
+  Pb: 120,
+  Bi: 5.0,
+  As: 30,
+  Zn: 250
+};
+
+/** 取某金属的限值；没有配置返回 null（不参与判定） */
+function thresholdOf(symbol) {
+  const v = THRESHOLD[symbol];
+  return (typeof v === 'number' && isFinite(v)) ? v : null;
+}
+
+/** 该行浓度是否超过限值（未检出 / 无标定不参与判定） */
+function isOverLimit(row) {
+  if (!row) return false;
+  const th = thresholdOf(row.symbol);
+  if (th === null) return false;
+  const c = Number(row.concentration);
+  return isFinite(c) && row.concentration !== '未检出' && c > th;
+}
+
 const PEAK_REFERENCE = {
   Cd: { peakV: -0.82, tolerance: 0.10 },
   Pb: { peakV: -0.56, tolerance: 0.10 },
@@ -3398,11 +3457,17 @@ function renderSpeciesInto(tbodyId, rows) {
     const bar = isHit
       ? `<span class="conc-bar" style="width:${pct.toFixed(1)}%"></span>`
       : '';
+    // 限值判定：超过阈值整格标红，并在数值下方列出限值
+    const over = isHit && isOverLimit(row);
+    const th = thresholdOf(row.symbol);
+    const lim = (isHit && th !== null)
+      ? `<span class="conc-lim">限值 ${th.toFixed(2)}</span>`
+      : '';
     return `
-    <tr class="${isHit ? 'hit' : ''}">
+    <tr class="${isHit ? 'hit' : ''}${over ? ' over' : ''}">
       <td class="metal">${escapeHtml(row.species)}</td>
       <td class="num${row.potential === null ? ' empty' : ''}">${cell(row.potential)}</td>
-      <td class="num conc-cell${concCls(row.concentration)}">${bar}<span class="conc-val">${cell(row.concentration)}</span></td>
+      <td class="num conc-cell${concCls(row.concentration)}${over ? ' over' : ''}">${bar}<span class="conc-val">${cell(row.concentration)}</span>${lim}</td>
       <td class="num${row.peakCurrent === null ? ' empty' : ''}">${cell(row.peakCurrent)}</td>
     </tr>`;
   }).join('');
@@ -4816,6 +4881,31 @@ function setVoltStats(startVolt, endVolt, stepVolt) {
  * 峰位、归属金属、浓度一次性呈现在图上，不必在表格与曲线之间来回比对）。
  * 数据来自 analyzeHeavyMetals 填好的 speciesRows —— 该函数在 drawCurve 之前调用。
  */
+/** 峰标注的两行富文本样式；over=true 时为超标的红色版本 */
+function makePeakRich(over) {
+  const nameColor = over ? '#b91c1c' : '#0f172a';
+  const valColor  = over ? '#dc2626' : '#1677ff';
+  return {
+    s: {
+      fontFamily: '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif',
+      fontSize: 12.5,
+      fontWeight: 650,
+      color: nameColor,
+      lineHeight: 17,
+      align: 'center'
+    },
+    g: { width: 4, height: 1, align: 'center' },
+    v: {
+      fontFamily: 'ui-monospace, Consolas, "SF Mono", monospace',
+      fontSize: 11,
+      fontWeight: 600,
+      color: valColor,
+      lineHeight: 14,
+      align: 'center'
+    }
+  };
+}
+
 function buildPeakMarks(sourceRows) {
   const rows = ((sourceRows || speciesRows) || []).filter(function (r) {
     return r && r.potential !== null && r.peakCurrent !== null;
@@ -4830,26 +4920,39 @@ function buildPeakMarks(sourceRows) {
     label: {
       show: true,
       position: 'top',
-      distance: 7,
-      formatter: function (p) { return p.data.tip; },
+      distance: 9,
+      /* 两行：上行金属名，下行浓度/数值；中文用系统黑体，数字用等宽字体 */
+      formatter: function (p) {
+        return '{s|' + p.data.name + '}{g| }' +
+          (p.data.val ? '\n{v|' + p.data.val + '}' : '');
+      },
+      rich: makePeakRich(false),
       color: '#0f172a',
-      fontFamily: 'ui-monospace, Consolas, monospace',
-      fontSize: 11,
-      fontWeight: 600,
-      backgroundColor: 'rgba(255,255,255,.92)',
+      backgroundColor: 'rgba(255,255,255,.96)',
       borderColor: '#dbe4f0',
       borderWidth: 1,
-      borderRadius: 4,
-      padding: [2, 6]
+      borderRadius: 7,
+      padding: [5, 9],
+      shadowBlur: 10,
+      shadowColor: 'rgba(15, 23, 42, .12)',
+      shadowOffsetY: 2
     },
     data: rows.map(function (r) {
       const conc = (r.concentration === null || r.concentration === undefined)
         ? '' : String(r.concentration);
-      return {
+      const over = isOverLimit(r);
+      const item = {
         name: r.species,
         coord: [Number(r.potential), Number(r.peakCurrent)],
+        val: conc ? conc + ' mg/kg' : '',
         tip: r.species + (conc ? ' ' + conc : '')
       };
+      if (over) {
+        // 超标峰：圆点与文字同步转红
+        item.itemStyle = { color: '#dc2626', borderColor: '#fff', borderWidth: 2 };
+        item.label = { rich: makePeakRich(true) };
+      }
+      return item;
     })
   };
 }
