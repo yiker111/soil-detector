@@ -3385,8 +3385,11 @@ function speciesRowsOfHistory(item) {
  *  勾选多条做对比时隐藏 —— 结果只对应某一条记录，混在一起会误导。 */
 function renderHistorySpecies(item) {
   const card = $('hisSpeciesCard');
-  if (card) card.classList.toggle('hidden', !item);
-  if (!item) return;
+  // 清洁任务不产出浓度结果：整张结果表隐藏，避免显示出无意义的浓度值
+  const isClean = !!item && item.taskType === '清洁任务';
+  const show = !!item && !isClean;
+  if (card) card.classList.toggle('hidden', !show);
+  if (!show) return;
   renderSpeciesInto('hmBodyHis', speciesRowsOfHistory(item));
 }
 
@@ -5156,7 +5159,8 @@ function renderHistoryChart() {
         data: pointsOf(item)
       };
       // 单条时把识别出的峰标在曲线上（与检测页一致）
-      if (!multi && i === 0) {
+      // 清洁任务没有浓度结果，不标峰，避免出现无意义的浓度数字
+      if (!multi && i === 0 && item.taskType !== '清洁任务') {
         s.markPoint = buildPeakMarks(speciesRowsOfHistory(item));
       }
       // 单条时保留面积填充；多条时关闭，避免互相遮挡看不清
