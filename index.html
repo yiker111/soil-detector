@@ -2212,6 +2212,47 @@ body.side-collapsed .nav-btn .ico { width: auto; }
   .alert-toast { right: 12px; left: 12px; bottom: 12px; max-width: none; min-width: 0; }
 }
 
+/* ===================== 检测 / 清洁 主题区分 ===================== */
+/* 参数页：默认（检测）蓝紫；清洁切换为青绿 */
+#paramPage.task-clean .param-grid .card::before {
+  background: linear-gradient(90deg, #0d9488, #2bb3a3);
+}
+#paramPage.task-clean .card-head h3::before {
+  background: linear-gradient(180deg, #0d9488, #2bb3a3);
+}
+#paramPage.task-clean .param-actions .btn-run {
+  background: linear-gradient(180deg, #16b3a3, #0d9488);
+  border-color: #0d9488;
+  box-shadow: 0 6px 18px rgba(13, 148, 136, .30);
+}
+#paramPage.task-clean .param-actions .btn-run:hover {
+  background: linear-gradient(180deg, #1cc0ae, #0f9f92);
+}
+#paramPage.task-clean #paramForm input:focus {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, .14);
+}
+#paramPage.task-clean .metric.m-scan::before { background: linear-gradient(90deg, #0d9488, #2bb3a3); }
+#paramPage.task-clean #paramPageTitle { color: #0b7c72; }
+
+#paramPage.task-detect #paramPageTitle { color: #1f4fd8; }
+
+/* 历史条目：类型标签按任务着色 */
+.hist-item.clean .type { color: #0b7c72; }
+.hist-item.detect .type { color: #1f4fd8; }
+.hist-item.clean .type::before,
+.hist-item.detect .type::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+.hist-item.clean .type::before { background: #0d9488; }
+.hist-item.detect .type::before { background: #1677ff; }
+
 /* ===================== 响应式 ===================== */
 @media (max-width: 1180px) {
   #detectPage { min-height: 0; }
@@ -5288,7 +5329,7 @@ function renderHistoryList() {
            background:${COMPARE_PALETTE[colorIdx % COMPARE_PALETTE.length].hex};"></span>`
       : '';
     return `
-      <div class="hist-item${String(item.id) === selectedId ? ' active' : ''}">
+      <div class="hist-item ${item.taskType === '清洁任务' ? 'clean' : 'detect'}${String(item.id) === selectedId ? ' active' : ''}">
         <div class="row1">
           <label class="cmp">
             <input type="checkbox" data-id="${item.id}" ${checked ? 'checked' : ''}
@@ -5449,7 +5490,11 @@ function renderHistoryChart() {
     grid: multi ? Object.assign({}, base.grid, { top: 46 }) : base.grid,
     tooltip: base.tooltip,
     series: items.map((item, i) => {
-      const c = COMPARE_PALETTE[i % COMPARE_PALETTE.length];
+      // 单看一条清洁记录时用青绿，和检测的蓝色曲线区分开
+      const isSoloClean = !multi && item.taskType === '清洁任务';
+      const c = isSoloClean
+        ? { hex: '#0d9488', fill: 'rgba(13,148,136,' }
+        : COMPARE_PALETTE[i % COMPARE_PALETTE.length];
       const s = {
         name: seriesNames[i],
         type: 'line',
@@ -5746,6 +5791,9 @@ function showParamPage(task) {
     if (el) el.classList.add('hidden');
   });
   $('paramPage').classList.remove('hidden');
+  // 检测 / 清洁 用两套主题色，避免两个参数页看起来一样
+  $('paramPage').classList.toggle('task-clean', task === 'CLEAN');
+  $('paramPage').classList.toggle('task-detect', task !== 'CLEAN');
   $('cleanPage').classList.add('hidden');
   $('runPage').classList.add('hidden');
   syncHomeBtn(false);
