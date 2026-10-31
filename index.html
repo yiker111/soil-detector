@@ -2143,6 +2143,75 @@ body.side-collapsed .nav-btn .ico { width: auto; }
   z-index: 2;
 }
 
+/* ===================== 警告浮层 ===================== */
+.alert-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-width: 280px;
+  max-width: 420px;
+  padding: 13px 14px 13px 13px;
+  background: #fff;
+  border: 1px solid #fbd5d5;
+  border-left: 4px solid var(--red);
+  border-radius: var(--r-lg);
+  box-shadow: 0 14px 34px rgba(185, 28, 28, .16), 0 2px 6px rgba(15, 23, 42, .06);
+  animation: toastIn .22s cubic-bezier(.2, .8, .3, 1);
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(12px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+.at-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--red);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+}
+.at-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.at-main strong {
+  font-size: 13px;
+  font-weight: 650;
+  color: #b91c1c;
+  letter-spacing: .2px;
+}
+.at-main span {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  /* 只在空格/标点处折行，避免把"限值 5.00"拆开 */
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+.at-close {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--ink-5);
+  font-size: 11px;
+  line-height: 20px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+.at-close:hover { background: #f4f6fa; color: var(--ink-3); }
+
+@media (max-width: 780px) {
+  .alert-toast { right: 12px; left: 12px; bottom: 12px; max-width: none; min-width: 0; }
+}
+
 /* ===================== 响应式 ===================== */
 @media (max-width: 1180px) {
   #detectPage { min-height: 0; }
@@ -2789,6 +2858,16 @@ body.side-collapsed .nav-btn .ico { width: auto; }
   </div>
 </div>
 
+<!-- ===================== 警告浮层（超标提示） ===================== -->
+<div id="alertToast" class="alert-toast hidden" role="alert">
+  <div class="at-icon">!</div>
+  <div class="at-main">
+    <strong id="alertTitle">检测结果超过限值</strong>
+    <span id="alertText"></span>
+  </div>
+  <button type="button" class="at-close" onclick="hideAlert()" aria-label="关闭">&#10005;</button>
+</div>
+
 <!-- ===================== 提示弹窗 ===================== -->
 <div id="tipModal" class="overlay hidden">
   <div class="modal modal-sm">
@@ -3167,7 +3246,46 @@ const HEAVY_METAL_SPECIES = [
  * 再按电位把峰指派给金属，所以这张表只用于"归属判断"，
  * 不再用于"窗口内取最大值"。
  * ===================================================================*/
-/**
+/* =====================================================================
+ * 警告浮层（超标提示）
+ * ---------------------------------------------------------------------
+ * 检测完成后若存在超过限值的金属，在右下角弹出提示，9 秒自动消失。
+ * 不用模态框，避免打断正在看曲线的操作。
+ * ===================================================================*/
+let alertTimer = 0;
+
+function showAlert(title, text) {
+  const box = $('alertToast');
+  if (!box) return;
+  const t = $('alertTitle');
+  const b = $('alertText');
+  if (t) t.textContent = title;
+  if (b) b.textContent = text;
+  box.classList.remove('hidden');
+  clearTimeout(alertTimer);
+  alertTimer = setTimeout(hideAlert, 9000);
+}
+
+function hideAlert() {
+  const box = $('alertToast');
+  if (box) box.classList.add('hidden');
+  clearTimeout(alertTimer);
+  alertTimer = 0;
+}
+
+/** 检查本批结果是否超限，超了就弹提示 */
+function reportOverLimit(rows) {
+  const over = (rows || []).filter(isOverLimit);
+  if (!over.length) return;
+  const parts = over.map(function (r) {
+    const th = thresholdOf(r.symbol);
+    return r.species + ' ' + Number(r.concentration).toFixed(2) + ' mg/kg（限值 ' +
+      (th === null ? '--' : th.toFixed(2)) + '）';
+  });
+  showAlert('检测结果超过限值', parts.join('、'));
+}
+
+/* =====================================================================
  * 超标判定限值（mg/kg）
  * ---------------------------------------------------------------------
  * 取自 GB 15618-2018《农用地土壤污染风险管控标准》风险筛选值，
@@ -3544,6 +3662,7 @@ function runHeavyMetalAnalysis(rawNums, scan) {
   const result = analyzeHeavyMetals(currents, scan, speciesRows);
   if (result && result.species) speciesRows = result.species;
   renderSpeciesTable();
+  reportOverLimit(speciesRows);
 }
 
 /* =====================================================================
@@ -6184,7 +6303,6 @@ function renderHomeOverview() {
       } else {
         const nums = hit.map(r => Number(r.concentration) || 0);
         const top = Math.max.apply(null, nums) || 1;
-        const anyOver = hit.some(function (r) { return isOverLimit(r); });
         rbox.innerHTML = hit.map(function (r, i) {
           const w = Math.max(6, (nums[i] / top) * 100);
           const over = isOverLimit(r);
@@ -6197,8 +6315,7 @@ function renderHomeOverview() {
               (over ? '<em class="hs-lim">' + th.toFixed(2) + '</em>' : '') + '</span>' +
           '</div>';
         }).join('') +
-        '<div class="hs-none">单位 mg/kg' + (anyOver ? ' · 红色为超限' : '') +
-          ' · 按本次最高值归一</div>';
+        '<div class="hs-none">单位 mg/kg · 按本次最高值归一</div>';
       }
       if (rinfo) rinfo.textContent = runs[0].time || '';
     }
