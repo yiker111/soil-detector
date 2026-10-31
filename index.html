@@ -90,6 +90,7 @@
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }
+html, body { overflow-x: hidden; }
 body {
   margin: 0;
   font-family: var(--font);
@@ -2050,10 +2051,44 @@ body.side-collapsed .nav-btn .ico { width: auto; }
   .focus-grid { grid-template-columns: minmax(0, 1fr); }
   .device-grid { grid-template-columns: minmax(0, 1fr); }
   .hist-grid { grid-template-columns: minmax(0, 1fr); }
+  /* 单列后不再需要内部滚动：整页滚动更自然，卡片也不会被截断 */
+  .hist-list {
+    max-height: none;
+    overflow: visible;
+    padding: 8px 8px 4px;
+  }
+  /* 单列时禁止子元素把栅格撑宽（否则卡片会超出屏幕） */
+  .hist-grid > *,
+  .focus-grid > *,
+  .device-grid > *,
+  .param-grid > * { min-width: 0; }
+  .hist-filter { flex-wrap: wrap; row-gap: 8px; }
+  .hist-filter-select { max-width: none; flex: 1 1 auto; }
+  .hist-item .row1 { flex-wrap: wrap; row-gap: 4px; }
+  .hist-item .acts { flex-wrap: wrap; }
+  .hist-item .acts .btn { flex: 1 1 120px; }
+  .card-head { flex-wrap: wrap; row-gap: 8px; }
+  /* 窄屏彻底禁止横向溢出：卡片与列表都不超过可视宽度 */
+  .content { min-width: 0; }
+  .hist-list, .hist-item { max-width: 100%; }
   .mode-cards { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 780px) {
   :root { --header-h: auto; }
+  /* 卡片头部：标题一行、操作另一行，避免窄屏被裁切 */
+  .card-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  .card-head > div {
+    flex-wrap: wrap !important;
+    justify-content: flex-end;
+    gap: 8px !important;
+  }
+  .hist-filter { padding: 10px 14px 0; }
+  .hist-list { padding: 8px; }
   .app-header { padding: 10px 14px; flex-wrap: wrap; height: auto; }
   .app-header h1 { font-size: 14px; }
   .app-body { flex-direction: column; }
