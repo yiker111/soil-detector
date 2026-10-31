@@ -1269,10 +1269,23 @@ body {
 }
 .hr-val span { font-size: 11px; color: var(--ink-4); font-weight: 500; margin-left: 2px; }
 .home-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   text-align: center;
   color: var(--ink-4);
   font-size: 12.5px;
   padding: 34px 0;
+}
+.home-empty::before {
+  content: "";
+  width: 44px;
+  height: 44px;
+  opacity: .55;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 17.5l4.8-5.6 3.7 3.2L16 8.5l5 4.5'/%3E%3Cpath d='M3 21h18'/%3E%3C/svg%3E") center / 44px 44px no-repeat;
 }
 
 /* 峰值趋势迷你图 */
@@ -1979,6 +1992,49 @@ body {
 #cleanParams .pc .v { font-size: 19px; font-weight: 650; letter-spacing: -.3px; }
 #cleanParams .pc .u { font-size: 11.5px; }
 
+/* ===================== 侧栏折叠 ===================== */
+.hd-icon {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  margin-right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background .16s, color .16s, border-color .16s;
+}
+.hd-icon:hover { background: #f2f6fd; border-color: var(--line); color: var(--brand); }
+
+.crumb-sep {
+  color: var(--ink-5);
+  font-size: 13px;
+  font-weight: 400;
+  margin: 0 -2px;
+}
+/* 首页隐藏了「主界面」按钮时，分隔符也一起隐藏 */
+#btnHome.hidden + .crumb-sep { display: none; }
+
+.side { transition: width .18s ease; }
+.nav-btn > span:last-child { transition: opacity .16s; }
+
+body.side-collapsed { --sidebar-w: 64px; }
+body.side-collapsed .side-label { display: none; }
+body.side-collapsed .side-nav { padding: 12px 8px; }
+body.side-collapsed .nav-btn {
+  justify-content: center;
+  padding: 0;
+  gap: 0;
+  height: 40px;
+  margin-bottom: 4px;
+}
+body.side-collapsed .nav-btn > span:last-child { display: none; }
+body.side-collapsed .nav-btn .ico { width: auto; }
+
 /* ===================== 响应式 ===================== */
 @media (max-width: 1180px) {
   #detectPage { min-height: 0; }
@@ -2011,6 +2067,10 @@ body {
     border-bottom: 1px solid var(--line);
     overflow-x: auto;
   }
+  body.side-collapsed .side { width: 100%; }
+  body.side-collapsed .side-nav { padding: 8px; }
+  body.side-collapsed .nav-btn { height: 32px; padding: 0 12px; }
+  body.side-collapsed .nav-btn > span:last-child { display: inline; }
   .side-nav { display: flex; gap: 3px; padding: 8px; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
   .side-label { display: none; }
   .nav-btn { width: auto; height: 32px; white-space: nowrap; padding: 0 12px; margin: 0; font-size: 13px; }
@@ -2044,6 +2104,10 @@ body {
 
   <!-- ===================== 顶部标题栏 ===================== -->
   <header class="app-header">
+    <button type="button" class="hd-icon" id="btnSide" onclick="toggleSidebar()"
+      title="收起 / 展开导航" aria-label="收起或展开导航">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
     <h1>直插式土壤重金属电化学检测系统</h1>
   </header>
 
@@ -2084,6 +2148,7 @@ body {
           title="返回主界面（模式选择）" style="flex:none;">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/></svg> 主界面
         </button>
+        <span class="crumb-sep">/</span>
         <h2 id="pageTitle">检测任务</h2>
       </div>
     </header>
@@ -2107,6 +2172,11 @@ body {
               <span class="k">设备</span>
               <span class="v" id="homeDevices">0</span>
               <span class="u">台</span>
+            </div>
+            <div class="hh-stat">
+              <span class="k">今日检测</span>
+              <span class="v" id="homeToday">0</span>
+              <span class="u">次</span>
             </div>
             <div class="hh-stat">
               <span class="k">当前设备</span>
@@ -2816,6 +2886,7 @@ function ensureSecureTransport() {
   saveDeviceList();
 }
 ensureSecureTransport();
+initSidebar();
 
 /* =====================================================================
  * MQTT 载荷解码
@@ -4854,8 +4925,7 @@ function renderHistoryList() {
   const container = $('historyList');
   if (!list.length) {
     const msg = historyDeviceFilter ? '该设备暂无历史记录' : '暂无历史记录';
-    container.innerHTML = '<div style="text-align:center; color:var(--ink-4); padding:36px 0; font-size:13px;">' +
-      msg + '</div>';
+    container.innerHTML = '<div class="home-empty">' + msg + '</div>';
     return;
   }
   const selectedId = String(selectedHistoryId == null ? '' : selectedHistoryId);
@@ -5695,6 +5765,41 @@ function navDevice() {
 }
 
 /* =====================================================================
+ * 侧边栏折叠
+ * ---------------------------------------------------------------
+ * 收起后只留图标，宽度 64px；状态记在 localStorage，下次进入沿用。
+ * ===================================================================*/
+const SIDE_KEY = 'swv_side_collapsed';
+
+function applySideState(collapsed) {
+  document.body.classList.toggle('side-collapsed', !!collapsed);
+  // 折叠后导航项只剩图标，用 title 提供提示
+  ['navHome', 'navDetect', 'navClean', 'navHistory', 'navDevice'].forEach(function (id) {
+    const el = $(id);
+    if (!el) return;
+    const label = el.querySelector('span:last-child');
+    if (!label) return;
+    if (collapsed) el.title = label.textContent;
+    else el.removeAttribute('title');
+  });
+}
+
+function toggleSidebar() {
+  const next = !document.body.classList.contains('side-collapsed');
+  applySideState(next);
+  try { localStorage.setItem(SIDE_KEY, next ? '1' : '0'); } catch (e) {}
+  // 侧栏宽度变化后图表需要重排
+  setTimeout(function () { resizeSoon(chart); resizeSoon(historyChart); }, 220);
+}
+
+/** 启动时恢复折叠状态 */
+function initSidebar() {
+  let saved = false;
+  try { saved = localStorage.getItem(SIDE_KEY) === '1'; } catch (e) {}
+  applySideState(saved);
+}
+
+/* =====================================================================
  * 首页仪表盘
  * ---------------------------------------------------------------------
  * 概览统计、最近检测、峰值趋势全部来自真实历史记录，
@@ -5769,6 +5874,12 @@ function renderHomeOverview() {
 
   const active = getActiveDevice();
   set('homeActiveDevice', active ? active.name : '--');
+
+  // 今日检测次数
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const todayCount = runs.filter(it => Number(it.savedAt) >= dayStart.getTime()).length;
+  set('homeToday', String(todayCount));
 
   set('homeHisMeta', all.length ? all.length + ' 条记录' : '暂无记录');
 
