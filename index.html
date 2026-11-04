@@ -3633,7 +3633,9 @@ function analyzePeakCHI(volts, y, eRef, half) {
     apex: apex.current,
     baseline: base,
     leftV: volts[li],
-    rightV: volts[ri]
+    rightV: volts[ri],
+    leftY: y[li],
+    rightY: y[ri]
   };
 }
 
@@ -3695,6 +3697,7 @@ function analyzeHeavyMetals(currents, scan, rows) {
     r.potential = null;
     r.peakCurrent = null;
     r.apexCurrent = null;
+    r.baseline = null;
     r.concentration = null;
   });
 
@@ -3724,6 +3727,12 @@ function analyzeHeavyMetals(currents, scan, rows) {
     row.potential = pk.potential.toFixed(3);
     row.peakCurrent = pk.height.toFixed(3);    // 基线校正后的峰高
     row.apexCurrent = pk.apex.toFixed(3);      // 峰顶绝对电流（画图用）
+    // 基线几何：画辅助线用
+    row.baseline = {
+      lx: pk.leftV, ly: pk.leftY,
+      rx: pk.rightV, ry: pk.rightY,
+      py: pk.baseline
+    };
 
     const cal = CALIBRATION[row.symbol];
     if (!cal || !(cal.k > 0)) return;          // 未标定 → 浓度留 --
@@ -3742,6 +3751,7 @@ function blankSpeciesRows() {
     potential: null,
     peakCurrent: null,
     apexCurrent: null,
+    baseline: null,
     concentration: null
   }));
 }
@@ -5245,6 +5255,43 @@ function makePeakRich(over) {
   };
 }
 
+/**
+ * 峰分析的辅助线：每个峰的基线 + 峰顶到基线的垂线。
+ * 基线取峰两侧谷点的连线（与峰高计算用的是同一条线），
+ * 垂线标出"峰高是在哪里量的"，便于和辰华软件对照。
+ */
+function buildPeakLines(sourceRows) {
+  const rows = ((sourceRows || speciesRows) || []).filter(function (r) {
+    return r && r.baseline && r.potential !== null && r.apexCurrent !== null;
+  });
+  if (!rows.length) return { silent: true, data: [] };
+
+  const segs = [];
+  rows.forEach(function (r) {
+    const b = r.baseline;
+    // 基线：两谷点连线
+    segs.push([
+      { coord: [b.lx, b.ly] },
+      { coord: [b.rx, b.ry] }
+    ]);
+    // 垂线：峰顶 → 基线（峰高的实际测量位置）
+    segs.push([
+      { coord: [Number(r.potential), Number(r.apexCurrent)] },
+      { coord: [Number(r.potential), b.py] }
+    ]);
+  });
+
+  return {
+    silent: true,
+    symbol: ['none', 'none'],
+    animation: false,
+    label: { show: false },
+    lineStyle: { color: '#94a3b8', width: 1, type: 'dashed', opacity: .9 },
+    emphasis: { disabled: true },
+    data: segs
+  };
+}
+
 function buildPeakMarks(sourceRows) {
   const rows = ((sourceRows || speciesRows) || []).filter(function (r) {
     return r && r.potential !== null && r.peakCurrent !== null;
@@ -5319,7 +5366,11 @@ function drawCurve(nums) {
   chart.setOption({
     // 轴范围锁定为 起始->终止：起始电位不入数据点，只作为坐标轴左端基准
     xAxis: voltAxisOpt(scan.start, scan.end),
-    series: [{ data: pts, markPoint: buildPeakMarks() }]
+    series: [{
+      data: pts,
+      markPoint: buildPeakMarks(),
+      markLine: buildPeakLines()
+    }]
   });
 
   // 结果摘要条（检测时间在这里更新）
@@ -5667,7 +5718,9 @@ function renderHistoryChart() {
       // 单条时把识别出的峰标在曲线上（与检测页一致）
       // 清洁任务没有浓度结果，不标峰，避免出现无意义的浓度数字
       if (!multi && i === 0 && item.taskType !== '清洁任务') {
-        s.markPoint = buildPeakMarks(speciesRowsOfHistory(item));
+        const hisRows = speciesRowsOfHistory(item);
+        s.markPoint = buildPeakMarks(hisRows);
+        s.markLine = buildPeakLines(hisRows);
       }
       // 单条时保留面积填充；多条时关闭，避免互相遮挡看不清
       if (!multi) {
@@ -6289,7 +6342,10 @@ function updateDeviceInfo() {
 
 /* ===================== 工具 ===================== */
 function clearChart() {
-  if (chart) chart.setOption({ xAxis: { min: 0, max: 1 }, series: [{ data: [], markPoint: { data: [] } }] });
+  if (chart) chart.setOption({
+    xAxis: { min: 0, max: 1 },
+    series: [{ data: [], markPoint: { data: [] }, markLine: { data: [] } }]
+  });
 
   ['runTime', 'runPoints', 'runDeposit'].forEach(id => {
     const el = $(id);
