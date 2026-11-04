@@ -3612,12 +3612,18 @@ function analyzePeakCHI(volts, y, eRef, half) {
   for (let i = lo + 1; i <= hi; i++) if (y[i] > y[pi]) pi = i;
   if (pi <= lo || pi >= hi) return null;           // 峰落在窗口边缘 → 不算
 
-  // ③ 两侧谷点连线性基线
+  // ③ 两侧谷点：在「窗口的 1.8 倍」范围内取各侧最低点
+  //    宽峰的谷点会落到更外侧的背景段上，避免基线斜穿峰体
+  const ext = half * 1.8;
+  let elo = 0, ehi = n - 1;
+  while (elo < n && volts[elo] < (eRef - ext)) elo++;
+  while (ehi >= 0 && volts[ehi] > (eRef + ext)) ehi--;
+
   let li = pi;
-  for (let i = pi - 1; i >= lo; i--) if (y[i] < y[li]) li = i;
+  for (let i = elo; i < pi; i++) if (y[i] < y[li]) li = i;
   let ri = pi;
-  for (let i = pi + 1; i <= hi; i++) if (y[i] < y[ri]) ri = i;
-  if (ri <= li) return null;
+  for (let i = pi + 1; i <= ehi; i++) if (y[i] < y[ri]) ri = i;
+  if (ri <= li || li === pi || ri === pi) return null;
 
   const ratio = (volts[pi] - volts[li]) / (volts[ri] - volts[li] || 1);
   const base = y[li] + (y[ri] - y[li]) * ratio;
@@ -5298,7 +5304,7 @@ function buildPeakGuideSeries(sourceRows) {
     const slope = spanX ? (b.ry - b.ly) / spanX : 0;
 
     out.push(mk('peakBase' + i, 3,
-      { color: '#f59e0b', width: 1.8, type: 'solid', opacity: .95 },
+      { color: '#94a3b8', width: 1.2, type: 'dashed', opacity: .9 },
       [[b.lx - ext, b.ly - ext * slope], [b.rx + ext, b.ry + ext * slope]]));
 
     // 连接线：左谷 → 峰顶 → 右谷（折线，一条 series 三个点不会串到别的峰）
