@@ -3429,7 +3429,8 @@ function hideRawWarn() {
 const HEAVY_METAL_SPECIES = [
   { species: '镉', symbol: 'Cd' },
   { species: '铅', symbol: 'Pb' },
-  { species: '铋', symbol: 'Bi' },
+  { species: '铜', symbol: 'Cu' },
+  { species: '汞', symbol: 'Hg' },
   { species: '砷', symbol: 'As' },
   { species: '锌', symbol: 'Zn' }
 ];
@@ -3487,14 +3488,14 @@ function reportOverLimit(rows) {
  * ---------------------------------------------------------------------
  * 取自 GB 15618-2018《农用地土壤污染风险管控标准》风险筛选值，
  * 这里用 pH 6.5~7.5「其他」一列的数值作为默认阈值：
- *   Cd 0.30 / Pb 120 / As 30 / Zn 250
- * 铋（Bi）该标准未收录，暂用内部参考值 5.0。
+ *   Cd 0.30 / Pb 120 / Cu 100 / Hg 2.4 / As 30 / Zn 250
  * 现场若按当地标准或土壤 pH 调整，只改这张表即可。
  * -------------------------------------------------------------------*/
 const THRESHOLD = {
   Cd: 0.30,
   Pb: 120,
-  Bi: 5.0,
+  Cu: 100,
+  Hg: 2.4,
   As: 30,
   Zn: 250
 };
@@ -3517,7 +3518,8 @@ function isOverLimit(row) {
 const PEAK_REFERENCE = {
   Cd: { peakV: -0.82, tolerance: 0.10 },
   Pb: { peakV: -0.56, tolerance: 0.10 },
-  Bi: { peakV: -0.30, tolerance: 0.10 },
+  Cu: { peakV: -0.25, tolerance: 0.10 },
+  Hg: { peakV:  0.15, tolerance: 0.08 },
   As: { peakV:  0.00, tolerance: 0.10 },
   Zn: { peakV: -1.00, tolerance: 0.10 }
 };
@@ -3681,7 +3683,8 @@ function analyzePeakCHI(volts, y, eRef, half) {
 const CALIBRATION = {
   Cd: { k: 0.20, b: 0.15 },
   Pb: { k: 0.26, b: 0.15 },
-  Bi: { k: 0.18, b: 0.15 },
+  Cu: { k: 0.22, b: 0.15 },
+  Hg: { k: 0.28, b: 0.15 },
   As: { k: 0.24, b: 0.15 },
   Zn: { k: 0.31, b: 0.15 }
 };
