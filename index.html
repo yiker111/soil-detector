@@ -5256,10 +5256,63 @@ function makePeakRich(over) {
 }
 
 /**
- * 峰分析的辅助线：每个峰的基线 + 峰顶到基线的垂线。
- * 基线取峰两侧谷点的连线（与峰高计算用的是同一条线），
- * 垂线标出"峰高是在哪里量的"，便于和辰华软件对照。
+ * 峰分析辅助线，分三组样式返回（每组一条 markLine）：
+ *   baseline  基线：两侧谷点连线，实线深灰
+ *   link      连接线：峰顶 ↔ 两侧谷点，蓝色虚线
+ *   drop      垂线：峰顶 → 基线，灰色点线（即峰高的测量位置）
+ * 返回可以直接铺进 series 的引导系列数组。
  */
+function buildPeakGuideSeries(sourceRows) {
+  const rows = ((sourceRows || speciesRows) || []).filter(function (r) {
+    return r && r.baseline && r.potential !== null && r.apexCurrent !== null;
+  });
+
+  const baseData = [];
+  const linkData = [];
+  const dropData = [];
+
+  rows.forEach(function (r) {
+    const b = r.baseline;
+    const ex = Number(r.potential);
+    const ey = Number(r.apexCurrent);
+
+    baseData.push([{ coord: [b.lx, b.ly] }, { coord: [b.rx, b.ry] }]);
+    linkData.push([{ coord: [b.lx, b.ly] }, { coord: [ex, ey] }]);
+    linkData.push([{ coord: [ex, ey] }, { coord: [b.rx, b.ry] }]);
+    dropData.push([{ coord: [ex, ey] }, { coord: [ex, b.py] }]);
+  });
+
+  const mkSeries = function (id, z, lineStyle, data) {
+    return {
+      id: id,
+      type: 'line',
+      data: [],
+      silent: true,
+      legendHoverLink: false,
+      animation: false,
+      z: z,
+      markLine: {
+        silent: true,
+        symbol: ['none', 'none'],
+        animation: false,
+        label: { show: false },
+        emphasis: { disabled: true },
+        lineStyle: lineStyle,
+        data: data
+      }
+    };
+  };
+
+  return [
+    mkSeries('peakBase', 3,
+      { color: '#64748b', width: 1.3, type: 'solid', opacity: .9 }, baseData),
+    mkSeries('peakLink', 3,
+      { color: '#3b82f6', width: 1, type: 'dashed', opacity: .6 }, linkData),
+    mkSeries('peakDrop', 4,
+      { color: '#94a3b8', width: 1, type: 'dotted', opacity: .85 }, dropData)
+  ];
+}
+
 function buildPeakLines(sourceRows) {
   const rows = ((sourceRows || speciesRows) || []).filter(function (r) {
     return r && r.baseline && r.potential !== null && r.apexCurrent !== null;
@@ -5366,11 +5419,9 @@ function drawCurve(nums) {
   chart.setOption({
     // 轴范围锁定为 起始->终止：起始电位不入数据点，只作为坐标轴左端基准
     xAxis: voltAxisOpt(scan.start, scan.end),
-    series: [{
-      data: pts,
-      markPoint: buildPeakMarks(),
-      markLine: buildPeakLines()
-    }]
+    series: [
+      { data: pts, markPoint: buildPeakMarks() }
+    ].concat(buildPeakGuideSeries())
   });
 
   // 结果摘要条（检测时间在这里更新）
@@ -5666,6 +5717,7 @@ function renderHistoryChart() {
   }
 
   const multi = items.length > 1;
+  let hisGuides = null;
 
   // 轴范围取所有选中记录的并集
   let xmin = Infinity;
@@ -5720,7 +5772,7 @@ function renderHistoryChart() {
       if (!multi && i === 0 && item.taskType !== '清洁任务') {
         const hisRows = speciesRowsOfHistory(item);
         s.markPoint = buildPeakMarks(hisRows);
-        s.markLine = buildPeakLines(hisRows);
+        hisGuides = buildPeakGuideSeries(hisRows);
       }
       // 单条时保留面积填充；多条时关闭，避免互相遮挡看不清
       if (!multi) {
@@ -5734,6 +5786,10 @@ function renderHistoryChart() {
       return s;
     })
   };
+
+  if (hisGuides && hisGuides.length) {
+    opt.series = opt.series.concat(hisGuides);
+  }
 
   if (multi) {
     opt.legend = {
@@ -6342,10 +6398,15 @@ function updateDeviceInfo() {
 
 /* ===================== 工具 ===================== */
 function clearChart() {
-  if (chart) chart.setOption({
-    xAxis: { min: 0, max: 1 },
-    series: [{ data: [], markPoint: { data: [] }, markLine: { data: [] } }]
-  });
+  if (chart) {
+    chart.setOption({
+      xAxis: { min: 0, max: 1 },
+      series: [{ data: [], markPoint: { data: [] } }]
+    });
+    buildPeakGuideSeries([]).forEach(function (s) {
+      chart.setOption({ series: [s] });
+    });
+  }
 
   ['runTime', 'runPoints', 'runDeposit'].forEach(id => {
     const el = $(id);
