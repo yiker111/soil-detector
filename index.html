@@ -2720,7 +2720,7 @@ body.side-collapsed .nav-btn .ico { width: auto; }
                     <th>种类</th>
                     <th>对应电位 (V)</th>
                     <th>浓度 (mg/kg)</th>
-                    <th>峰值电流 (μA)</th>
+                    <th>峰高 (μA)</th>
                   </tr>
                 </thead>
                 <tbody id="hmBody">
@@ -2811,7 +2811,7 @@ body.side-collapsed .nav-btn .ico { width: auto; }
                     <th>种类</th>
                     <th>对应电位 (V)</th>
                     <th>浓度 (mg/kg)</th>
-                    <th>峰值电流 (μA)</th>
+                    <th>峰高 (μA)</th>
                   </tr>
                 </thead>
                 <tbody id="hmBodyHis">
@@ -3438,10 +3438,10 @@ const HEAVY_METAL_SPECIES = [
  * 重金属峰位参考
  * ---------------------------------------------------------------------
  * peakV      该金属溶出峰的"正常电位"（V）
- * tolerance  允许偏差（V）—— 只有落在这个范围内的峰才可能被认领
- * 峰识别先在整条曲线上找出所有真实的峰（见 findPeaks），
- * 再按电位把峰指派给金属，所以这张表只用于"归属判断"，
- * 不再用于"窗口内取最大值"。
+ * tolerance  允许偏差（V）—— 也是每个金属的默认搜索半宽
+ * 找峰方式与辰华 CHI660F 一致：以 peakV 为中心开一个窗口，
+ * 窗口内做平滑 → 找极值 → 两侧谷点连基线 → 读基线校正后的峰高
+ * （见 analyzePeakCHI）。窗口互不重叠，因此不需要"峰归属"这一步。
  * ===================================================================*/
 /* =====================================================================
  * 警告浮层（超标提示）
@@ -3523,21 +3523,119 @@ const PEAK_REFERENCE = {
 };
 
 /* =====================================================================
- * 峰识别参数
+ * 峰分析算法（对齐辰华 CHI660F 的 Peak Find 处理方式）
  * ---------------------------------------------------------------------
- * smoothWindow   平滑窗口（点数）。1 = 不平滑，3 = 三点滑动平均。
- *                轻平滑可压制采样毛刺，避免把噪点当成峰。
- * minProminence  最小峰突出度（μA）。低于此值不认作峰。
- *                突出度 = 峰顶电流 − 左右两侧"回到峰高之前"的最低点中较高者，
- *                也就是这个峰相对周围地形的"独立高度"。
- * minSeparation  两个峰之间的最小电位间隔（V）。更近的弱峰会被并入强峰，
- *                避免同一个峰被检出两次。
+ * 辰华软件找峰不是一个单一的判据，而是四步：
+ *   ① 平滑      —— 对曲线做 Savitzky–Golay 二次平滑，压掉采样毛刺
+ *   ② 找极值    —— 在指定电位窗口内找 dI/dE = 0 的点（阳极峰即电流极大）
+ *   ③ 扣基线    —— 峰两侧各取一个"谷点"，两点连成线性基线，
+ *                  基线在峰位的取值即背景电流
+ *   ④ 读峰高    —— 峰高 = 峰顶电流 − 基线电流（μA），这才是标定用的量
+ * 峰位再做三点抛物线细化，得到亚采样的 Ep。
+ *
+ * sgWindow    Savitzky–Golay 窗口点数（奇数，默认 7）。
+ *             1 = 不平滑。窗口越大曲线越平，但宽峰会变矮。
+ * sgOrder     拟合阶数（目前内置二次多项式的系数表）。
+ * windowHalf  搜索窗口半宽（V）。不填则用 PEAK_REFERENCE 里的 tolerance。
+ * minHeight   最小峰高（μA）。基线校正后低于该值视为无峰。
  * ===================================================================*/
-const PEAK_DETECT = {
-  smoothWindow: 3,
-  minProminence: 0.005,
-  minSeparation: 0.03
+const PEAK_ALGO = {
+  sgWindow: 7,
+  sgOrder: 2,
+  windowHalf: null,
+  minHeight: 0.002
 };
+
+/** Savitzky–Golay 二次平滑系数（归一化前的整数表，已除以分母） */
+const SG_COEFS = {
+  5:  [-3, 12, 17, 12, -3].map(v => v / 35),
+  7:  [-2, 3, 6, 7, 6, 3, -2].map(v => v / 21),
+  9:  [-21, 14, 39, 54, 59, 54, 39, 14, -21].map(v => v / 231),
+  11: [-36, 9, 44, 69, 84, 89, 84, 69, 44, 9, -36].map(v => v / 429)
+};
+
+/** 对曲线做 Savitzky–Golay 平滑；窗口不合法时原样返回 */
+function savgolSmooth(data, win) {
+  const w = Math.round(win || 1);
+  const coef = SG_COEFS[w];
+  if (!coef || data.length <= w) return data.slice();
+  const half = (w - 1) / 2;
+  const out = new Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    if (i < half || i >= data.length - half) {
+      out[i] = data[i];            // 两端不做平滑，避免边界失真
+      continue;
+    }
+    let s = 0;
+    for (let k = -half; k <= half; k++) s += data[i + k] * coef[k + half];
+    out[i] = s;
+  }
+  return out;
+}
+
+/** 三点抛物线细化峰位，返回 { potential, current } */
+function refineApex(volts, y, i) {
+  if (i <= 0 || i >= y.length - 1) {
+    return { potential: volts[i], current: y[i] };
+  }
+  const y0 = y[i - 1], y1 = y[i], y2 = y[i + 1];
+  const denom = y0 - 2 * y1 + y2;
+  if (!denom) return { potential: volts[i], current: y1 };
+  const delta = 0.5 * (y0 - y2) / denom;          // 单位：采样点
+  if (Math.abs(delta) > 1) return { potential: volts[i], current: y1 };
+  const step = Math.abs(volts[1] - volts[0]) || 0;
+  return {
+    potential: volts[i] + delta * step,
+    current: y1 - 0.25 * (y0 - y2) * delta
+  };
+}
+
+/**
+ * 在 [eRef−half, eRef+half] 窗口内按辰华的方式解析一个峰。
+ * @returns {{potential:number, height:number, apex:number, baseline:number,
+ *            leftV:number, rightV:number}|null}
+ *          height 为基线校正后的峰高；apex 为峰顶绝对电流；无峰返回 null
+ */
+function analyzePeakCHI(volts, y, eRef, half) {
+  const n = y.length;
+  const lo0 = eRef - half;
+  const hi0 = eRef + half;
+
+  // 窗口边界（数据是单调电位，直接线性定位）
+  let lo = 0, hi = n - 1;
+  while (lo < n && volts[lo] < lo0) lo++;
+  while (hi >= 0 && volts[hi] > hi0) hi--;
+  if (hi - lo < 4) return null;                    // 窗口内点数太少
+
+  // ② 窗口内找电流极大（比较用平滑后的曲线，抗噪）
+  let pi = lo;
+  for (let i = lo + 1; i <= hi; i++) if (y[i] > y[pi]) pi = i;
+  if (pi <= lo || pi >= hi) return null;           // 峰落在窗口边缘 → 不算
+
+  // ③ 两侧谷点连线性基线
+  let li = pi;
+  for (let i = pi - 1; i >= lo; i--) if (y[i] < y[li]) li = i;
+  let ri = pi;
+  for (let i = pi + 1; i <= hi; i++) if (y[i] < y[ri]) ri = i;
+  if (ri <= li) return null;
+
+  const ratio = (volts[pi] - volts[li]) / (volts[ri] - volts[li] || 1);
+  const base = y[li] + (y[ri] - y[li]) * ratio;
+
+  // ④ 峰高 = 峰顶 − 基线
+  const apex = refineApex(volts, y, pi);
+  const height = apex.current - base;
+  if (!isFinite(height) || height < PEAK_ALGO.minHeight) return null;
+
+  return {
+    potential: apex.potential,
+    height: height,
+    apex: apex.current,
+    baseline: base,
+    leftV: volts[li],
+    rightV: volts[ri]
+  };
+}
 
 /* =====================================================================
  * 标准曲线标定（线性拟合）
@@ -3574,108 +3672,6 @@ let speciesRows = HEAVY_METAL_SPECIES.map(it => ({
   concentration: null
 }));
 
-/**
- * 重金属定量分析。
- * @param {number[]} currents 差值段的电流值（μA），顺序对应扫描电位递增
- * @param {object}   scan     { start, end, step } 扫描参数（V）
- * @param {Array}    rows     结果行（会被就地填充并返回）
- * @returns {{ok: boolean, species: Array}}
- *
- * 流程：
- *   1) 按扫描参数算出每一点的电位
- *   2) 取该金属"正常电位"附近作为搜索窗口
- *   3) 窗口内找电流最大的点，再对相邻三点做抛物线拟合
- *      → 得到亚采样的峰位与峰电流（两者取同一个顶点）
- *   4) 有标定的金属，由 C = (I_peak − b) / k 反解浓度
- */
-/**
- * 在曲线上识别所有真实的峰。
- * @param {number[]} volts    逐点电位（V）
- * @param {number[]} currents 逐点电流（μA）
- * @returns {Array<{index:number, potential:number, current:number, prominence:number}>}
- *
- * 判据：
- *   1) 局部极大（左右都不高于它，且不是全平段）
- *   2) 突出度 ≥ PEAK_DETECT.minProminence
- *   3) 与已保留的峰相距 ≥ minSeparation，太近的弱峰并入强峰
- * 峰位与峰电流在**原始数据**上做三点抛物线细化，取同一个顶点。
- */
-function findPeaks(volts, currents) {
-  const o = PEAK_DETECT;
-  const n = currents.length;
-  if (!n || n < 5) return [];
-
-  // 轻平滑（居中滑动平均），用于"找峰"，不用于读数
-  const w = Math.max(1, Math.round(o.smoothWindow || 1));
-  let y = currents;
-  if (w > 1) {
-    const half = Math.floor(w / 2);
-    y = currents.map(function (_, i) {
-      let sum = 0, cnt = 0;
-      for (let k = -half; k <= half; k++) {
-        const idx = i + k;
-        if (idx >= 0 && idx < n) { sum += currents[idx]; cnt++; }
-      }
-      return sum / cnt;
-    });
-  }
-
-  const step = n > 1 ? Math.abs(volts[1] - volts[0]) : 0;
-  const found = [];
-
-  for (let i = 1; i < n - 1; i++) {
-    const v = y[i];
-    // 局部极大；要求至少一侧严格更低，避免把平坦段全部当成峰
-    if (!(v >= y[i - 1] && v >= y[i + 1])) continue;
-    if (!(v > y[i - 1] || v > y[i + 1])) continue;
-
-    // 突出度：向两侧走到比峰更高的点为止，记录两侧最低点
-    let leftMin = v, rightMin = v;
-    for (let j = i - 1; j >= 0; j--) {
-      if (y[j] > v) break;
-      if (y[j] < leftMin) leftMin = y[j];
-    }
-    for (let j = i + 1; j < n; j++) {
-      if (y[j] > v) break;
-      if (y[j] < rightMin) rightMin = y[j];
-    }
-    const prominence = v - Math.max(leftMin, rightMin);
-    if (!(prominence >= o.minProminence)) continue;
-
-    // 三点抛物线细化（用原始数据）
-    const y0 = currents[i - 1];
-    const y1 = currents[i];
-    const y2 = currents[i + 1];
-    const denom = y0 - 2 * y1 + y2;
-    let dV = 0;
-    let apexI = y1;
-    if (denom !== 0) {
-      const delta = 0.5 * (y0 - y2) / denom;   // 单位：采样点
-      if (Math.abs(delta) <= 1) {
-        dV = delta * step;
-        apexI = y1 - 0.25 * (y0 - y2) * delta;
-      }
-    }
-
-    found.push({
-      index: i,
-      potential: volts[i] + dV,
-      current: apexI,
-      prominence: prominence
-    });
-  }
-
-  // 太近的峰合并：保留突出度更大的那个
-  found.sort(function (a, b) { return b.prominence - a.prominence; });
-  const kept = [];
-  found.forEach(function (pk) {
-    const tooClose = kept.some(function (k) {
-      return Math.abs(k.potential - pk.potential) < o.minSeparation;
-    });
-    if (!tooClose) kept.push(pk);
-  });
-  return kept;
-}
 
 /**
  * 重金属定量分析。
@@ -3685,8 +3681,10 @@ function findPeaks(volts, currents) {
  *
  * 流程：
  *   1) 按扫描参数算出每一点电位
- *   2) findPeaks() 在整条曲线上识别所有真实的峰（局部极大 + 突出度）
- *   3) 峰 → 金属：按突出度从强到弱，每个峰认领"电位最接近、尚未被认领"的金属
+ *   2) Savitzky–Golay 平滑整条曲线
+ *   3) 每个金属在 [peakV − tolerance, peakV + tolerance] 窗口内找电流极大
+ *   4) 峰两侧谷点连线性基线，峰高 = 峰顶 − 基线；无峰或峰高过低视为未检出
+ *   5) 有标定的金属，由 C = (峰高 − b) / k 反解浓度
  *   4) 有标定的金属，由 C = (I − b) / k 反解浓度
  */
 function analyzeHeavyMetals(currents, scan, rows) {
@@ -3696,6 +3694,7 @@ function analyzeHeavyMetals(currents, scan, rows) {
   list.forEach(function (r) {
     r.potential = null;
     r.peakCurrent = null;
+    r.apexCurrent = null;
     r.concentration = null;
   });
 
@@ -3710,38 +3709,25 @@ function analyzeHeavyMetals(currents, scan, rows) {
       : scan.start + (i + 1) * scan.step;
   });
 
-  // 1) 识别所有峰
-  const peaks = findPeaks(volts, currents);
-  if (!peaks.length) return { ok: true, species: list };
+  // ① 平滑：Savitzky–Golay，压掉采样毛刺
+  const y = savgolSmooth(currents, PEAK_ALGO.sgWindow);
 
-  // 2) 峰 → 金属：强峰先选，避免弱噪声抢走某台金属的归属
-  const claimed = {};                 // symbol -> peak
-  peaks.forEach(function (pk) {
-    let best = null;
-    let bestDist = Infinity;
-    list.forEach(function (row) {
-      if (claimed[row.symbol]) return;
-      const ref = PEAK_REFERENCE[row.symbol];
-      if (!ref) return;
-      const dist = Math.abs(pk.potential - ref.peakV);
-      if (dist <= ref.tolerance && dist < bestDist) {
-        best = row;
-        bestDist = dist;
-      }
-    });
-    if (best) claimed[best.symbol] = pk;
-  });
-
-  // 3) 填结果
+  // ②③④ 逐个金属在各自的电位窗口内解析
   list.forEach(function (row) {
-    const pk = claimed[row.symbol];
-    if (!pk) return;                        // 该金属没有对应的峰 → 保持 --
+    const ref = PEAK_REFERENCE[row.symbol];
+    if (!ref) return;
+    const half = (PEAK_ALGO.windowHalf > 0) ? PEAK_ALGO.windowHalf : ref.tolerance;
+
+    const pk = analyzePeakCHI(volts, y, ref.peakV, half);
+    if (!pk) return;                     // 该金属没有峰 → 保持 --
+
     row.potential = pk.potential.toFixed(3);
-    row.peakCurrent = pk.current.toFixed(3);
+    row.peakCurrent = pk.height.toFixed(3);    // 基线校正后的峰高
+    row.apexCurrent = pk.apex.toFixed(3);      // 峰顶绝对电流（画图用）
 
     const cal = CALIBRATION[row.symbol];
-    if (!cal || !(cal.k > 0)) return;       // 未标定 → 浓度留 --
-    const conc = (pk.current - cal.b) / cal.k;
+    if (!cal || !(cal.k > 0)) return;          // 未标定 → 浓度留 --
+    const conc = (pk.height - cal.b) / cal.k;
     row.concentration = (isFinite(conc) && conc > 0) ? conc.toFixed(2) : '未检出';
   });
 
@@ -3755,6 +3741,7 @@ function blankSpeciesRows() {
     symbol: it.symbol,
     potential: null,
     peakCurrent: null,
+    apexCurrent: null,
     concentration: null
   }));
 }
@@ -5295,7 +5282,8 @@ function buildPeakMarks(sourceRows) {
       const over = isOverLimit(r);
       const item = {
         name: r.species,
-        coord: [Number(r.potential), Number(r.peakCurrent)],
+        coord: [Number(r.potential),
+          Number(r.apexCurrent != null ? r.apexCurrent : r.peakCurrent)],
         val: conc ? conc + ' mg/kg' : '',
         tip: r.species + (conc ? ' ' + conc : '')
       };
