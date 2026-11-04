@@ -5266,53 +5266,53 @@ function buildPeakGuideSeries(sourceRows) {
   const rows = ((sourceRows || speciesRows) || []).filter(function (r) {
     return r && r.baseline && r.potential !== null && r.apexCurrent !== null;
   });
+  if (!rows.length) return [];
 
-  const baseData = [];
-  const linkData = [];
-  const dropData = [];
+  const mk = function (id, z, style, data) {
+    return {
+      id: id,
+      name: '',
+      type: 'line',
+      data: data,
+      silent: true,
+      symbol: 'none',
+      showSymbol: false,
+      smooth: false,
+      animation: false,
+      z: z,
+      lineStyle: style,
+      emphasis: { disabled: true },
+      tooltip: { show: false }
+    };
+  };
 
-  rows.forEach(function (r) {
+  const out = [];
+  rows.forEach(function (r, i) {
     const b = r.baseline;
     const ex = Number(r.potential);
     const ey = Number(r.apexCurrent);
 
-    baseData.push([{ coord: [b.lx, b.ly] }, { coord: [b.rx, b.ry] }]);
-    linkData.push([{ coord: [b.lx, b.ly] }, { coord: [ex, ey] }]);
-    linkData.push([{ coord: [ex, ey] }, { coord: [b.rx, b.ry] }]);
-    dropData.push([{ coord: [ex, ey] }, { coord: [ex, b.py] }]);
+    // 基线：两谷点连线，两端各外扩 4%，避免与曲线重合看不清
+    const spanX = b.rx - b.lx;
+    const ext = spanX * 0.04;
+    const slope = spanX ? (b.ry - b.ly) / spanX : 0;
+
+    out.push(mk('peakBase' + i, 3,
+      { color: '#f59e0b', width: 1.8, type: 'solid', opacity: .95 },
+      [[b.lx - ext, b.ly - ext * slope], [b.rx + ext, b.ry + ext * slope]]));
+
+    // 连接线：左谷 → 峰顶 → 右谷（折线，一条 series 三个点不会串到别的峰）
+    out.push(mk('peakLink' + i, 3,
+      { color: '#3b82f6', width: 1, type: 'dashed', opacity: .6 },
+      [[b.lx, b.ly], [ex, ey], [b.rx, b.ry]]));
+
+    // 垂线：峰顶 → 基线
+    out.push(mk('peakDrop' + i, 4,
+      { color: '#94a3b8', width: 1, type: 'dotted', opacity: .85 },
+      [[ex, ey], [ex, b.py]]));
   });
-
-  const mkSeries = function (id, z, lineStyle, data) {
-    return {
-      id: id,
-      type: 'line',
-      data: [],
-      silent: true,
-      legendHoverLink: false,
-      animation: false,
-      z: z,
-      markLine: {
-        silent: true,
-        symbol: ['none', 'none'],
-        animation: false,
-        label: { show: false },
-        emphasis: { disabled: true },
-        lineStyle: lineStyle,
-        data: data
-      }
-    };
-  };
-
-  return [
-    mkSeries('peakBase', 3,
-      { color: '#64748b', width: 1.3, type: 'solid', opacity: .9 }, baseData),
-    mkSeries('peakLink', 3,
-      { color: '#3b82f6', width: 1, type: 'dashed', opacity: .6 }, linkData),
-    mkSeries('peakDrop', 4,
-      { color: '#94a3b8', width: 1, type: 'dotted', opacity: .85 }, dropData)
-  ];
+  return out;
 }
-
 function buildPeakLines(sourceRows) {
   const rows = ((sourceRows || speciesRows) || []).filter(function (r) {
     return r && r.baseline && r.potential !== null && r.apexCurrent !== null;
@@ -5799,7 +5799,7 @@ function renderHistoryChart() {
       itemHeight: 8,
       itemGap: 14,
       textStyle: { color: '#64748b', fontSize: 11.5 },
-      data: opt.series.map(s => s.name)
+      data: opt.series.filter(s => s.name).map(s => s.name)
     };
     // 多曲线时 tooltip 列出每一条的值
     opt.tooltip = Object.assign({}, base.tooltip, {
