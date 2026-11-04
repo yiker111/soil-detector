@@ -3612,17 +3612,30 @@ function analyzePeakCHI(volts, y, eRef, half) {
   for (let i = lo + 1; i <= hi; i++) if (y[i] > y[pi]) pi = i;
   if (pi <= lo || pi >= hi) return null;           // 峰落在窗口边缘 → 不算
 
-  // ③ 两侧谷点：在「窗口的 1.8 倍」范围内取各侧最低点
-  //    宽峰的谷点会落到更外侧的背景段上，避免基线斜穿峰体
-  const ext = half * 1.8;
-  let elo = 0, ehi = n - 1;
-  while (elo < n && volts[elo] < (eRef - ext)) elo++;
-  while (ehi >= 0 && volts[ehi] > (eRef + ext)) ehi--;
+  // ③ 两侧谷点：从峰顶沿下坡一直走到"真正拐平"的位置
+  //    ── 允许微小回升（噪声/基线起伏），用峰高的 0.3% 作容差
+  //    ── 最远走到窗口的 3 倍，避免谷点跑到太远的地方
+  const eps = Math.max(1e-6, (y[pi] - Math.min.apply(null, y.slice(lo, hi + 1))) * 0.003);
+  const maxWalk = Math.max(10, Math.round((half * 3) / (Math.abs(volts[1] - volts[0]) || half)));
 
-  let li = pi;
-  for (let i = elo; i < pi; i++) if (y[i] < y[li]) li = i;
-  let ri = pi;
-  for (let i = pi + 1; i <= ehi; i++) if (y[i] < y[ri]) ri = i;
+  const walk = function (dir) {
+    let i = pi;
+    let steps = 0;
+    let best = pi;                 // 记录走过的最低点，避免停在坡上
+    let bestY = y[pi];
+    while (steps < maxWalk) {
+      const next = i + dir;
+      if (next < 0 || next >= n) break;              // 到数据边界
+      if (y[next] > bestY + eps) break;              // 已越过谷底并明显回升
+      i = next;
+      steps++;
+      if (y[i] < bestY) { bestY = y[i]; best = i; }  // 更新最低点
+    }
+    return best;
+  };
+
+  const li = walk(-1);
+  const ri = walk(+1);
   if (ri <= li || li === pi || ri === pi) return null;
 
   const ratio = (volts[pi] - volts[li]) / (volts[ri] - volts[li] || 1);
