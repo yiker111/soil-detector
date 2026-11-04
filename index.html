@@ -3644,12 +3644,14 @@ function analyzePeakCHI(volts, y, eRef, half) {
   const base = y[li] + (y[ri] - y[li]) * ratio;
 
   // ④ 峰高 = 峰顶 − 基线
+  //    峰高用抛物线细化（读数更准），但峰位报实际采样点，
+  //    这样表里的「对应电位」一定能在数据点里找到，便于核对。
   const apex = refineApex(volts, y, pi);
   const height = apex.current - base;
   if (!isFinite(height) || height < PEAK_ALGO.minHeight) return null;
 
   return {
-    potential: apex.potential,
+    potential: volts[pi],
     height: height,
     apex: apex.current,
     baseline: base,
