@@ -3606,7 +3606,8 @@ function findAllPeaks(volts, y) {
   let ymin = Infinity, ymax = -Infinity;
   for (let i = 0; i < n; i++) { if (y[i] < ymin) ymin = y[i]; if (y[i] > ymax) ymax = y[i]; }
   const span = ymax - ymin;
-  const minH = Math.max(PEAK_ALGO.minHeight, span * 0.008);   // 幅度的 0.8%
+  // 阈值按曲线幅度取 2%：极小的毛刺不再当成峰
+  const minH = Math.max(PEAK_ALGO.minHeight, span * 0.02);
   const minSep = 0.03;                                        // V
 
   const out = [];
@@ -3618,6 +3619,12 @@ function findAllPeaks(volts, y) {
     if (pk.height < minH) continue;
     if (out.some(function (o) { return Math.abs(o.potential - pk.potential) < minSep; })) continue;
     out.push(pk);
+  }
+
+  // 相对过滤：比最大峰还小 4% 的起伏一律不标（主峰旁边的微小毛刺）
+  if (out.length > 1) {
+    const maxH = out.reduce(function (m, p) { return Math.max(m, p.height); }, 0);
+    return out.filter(function (p) { return p.height >= maxH * 0.04; });
   }
   return out;
 }
@@ -5514,13 +5521,15 @@ function buildPeakMarks(sourceRows) {
       data: peaks.map(function (pk) {
         const row = pk.row || null;
         const assigned = !!row;
-        const conc = (row && row.concentration !== null && row.concentration !== undefined)
+        const concRaw = (row && row.concentration !== null && row.concentration !== undefined)
           ? String(row.concentration) : '';
+        // "未检出" 不是一个有意义的读数，改显示峰高
+        const conc = (concRaw && concRaw !== '未检出') ? concRaw : '';
         const item = {
           name: assigned ? row.species : '峰',
           coord: [Number(pk.potential), Number(pk.apex)],
-          val: assigned
-            ? (conc ? conc + ' mg/kg' : '')
+          val: conc
+            ? (conc + ' mg/kg')
             : (Number(pk.height).toFixed(2) + ' μA'),
           tip: (assigned ? row.species : '未归属峰') +
                ' ' + Number(pk.potential).toFixed(3) + ' V'
