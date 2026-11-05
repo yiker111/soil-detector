@@ -3598,13 +3598,15 @@ function refineApex(volts, y, i) {
  * 每个峰都按辰华的方式配一条「两侧谷点」基线。
  * @returns {Array<{index,potential,height,apex,baseline,leftV,rightV,leftY,rightY}>}
  */
-function findAllPeaks(volts, y) {
+function findAllPeaks(volts, y, raw) {
   const n = y.length;
   if (n < 5) return [];
+  // 平滑曲线只用来"定位峰位与谷点"，读数统一回到原始点
+  const data = raw || y;
 
   // 以曲线自身幅度定一个相对阈值，避免平坦段把噪声当峰
   let ymin = Infinity, ymax = -Infinity;
-  for (let i = 0; i < n; i++) { if (y[i] < ymin) ymin = y[i]; if (y[i] > ymax) ymax = y[i]; }
+  for (let i = 0; i < n; i++) { if (data[i] < ymin) ymin = data[i]; if (data[i] > ymax) ymax = data[i]; }
   const span = ymax - ymin;
   // 阈值按曲线幅度取 2%：极小的毛刺不再当成峰
   const minH = Math.max(PEAK_ALGO.minHeight, span * 0.02);
@@ -3614,7 +3616,7 @@ function findAllPeaks(volts, y) {
   for (let i = 1; i < n - 1; i++) {
     if (!(y[i] > y[i - 1] && y[i] >= y[i + 1])) continue;
 
-    const pk = analyzePeakAt(volts, y, i);
+    const pk = analyzePeakAt(volts, y, data, i);
     if (!pk) continue;
     if (pk.height < minH) continue;
     if (out.some(function (o) { return Math.abs(o.potential - pk.potential) < minSep; })) continue;
@@ -3632,9 +3634,10 @@ function findAllPeaks(volts, y) {
 /**
  * 以指定索引为峰顶，解析一个峰（平滑曲线 + 两侧谷点基线 + 抛物线峰高）。
  */
-function analyzePeakAt(volts, y, pi) {
+function analyzePeakAt(volts, y, raw, pi) {
   const n = y.length;
   if (pi <= 0 || pi >= n - 1) return null;
+  const data = raw || y;
 
   // 谷点：从峰顶沿下坡走到拐平处（允许噪声造成的微小回升）
   const eps = Math.max(1e-6, (y[pi] - Math.min.apply(null, y)) * 0.003);
@@ -3654,21 +3657,23 @@ function analyzePeakAt(volts, y, pi) {
   const ri = walk(+1);
   if (ri <= li || li === pi || ri === pi) return null;
 
+  // 基线两端与峰顶都取原始数据：圆点正好落在曲线上，
+  // 峰高也正好等于"峰顶到基线"的垂直距离
   const ratio = (volts[pi] - volts[li]) / (volts[ri] - volts[li] || 1);
-  const base = y[li] + (y[ri] - y[li]) * ratio;
+  const base = data[li] + (data[ri] - data[li]) * ratio;
 
-  const apex = refineApex(volts, y, pi);
-  const height = apex.current - base;
+  const apex = data[pi];
+  const height = apex - base;
   if (!isFinite(height) || height <= 0) return null;
 
   return {
     index: pi,
     potential: volts[pi],
     height: height,
-    apex: apex.current,
+    apex: apex,
     baseline: base,
     leftV: volts[li], rightV: volts[ri],
-    leftY: y[li], rightY: y[ri]
+    leftY: data[li], rightY: data[ri]
   };
 }
 
@@ -3829,7 +3834,7 @@ function analyzeHeavyMetals(currents, scan, rows) {
   const y = savgolSmooth(currents, PEAK_ALGO.sgWindow);
 
   // ② 全局找峰：不管有没有对应金属，先把所有峰都找出来
-  const peaks = findAllPeaks(volts, y);
+  const peaks = findAllPeaks(volts, y, currents);
 
   // ③ 峰 → 金属：每个峰找"电位最近且未占用"的金属，距离上限 1.6×tolerance
   const used = {};                       // symbol -> 已占用
