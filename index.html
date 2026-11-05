@@ -3600,19 +3600,26 @@ function refineApex(volts, y, i) {
  */
 function analyzePeakCHI(volts, y, eRef, half) {
   const n = y.length;
-  const lo0 = eRef - half;
-  const hi0 = eRef + half;
+  // 搜索范围取参考电位的 ±1.6 倍容差：真实峰位常常比参考值偏一点，
+  // 若严格卡在 ±1 倍内，峰顶会被切在窗口边界上导致漏检
+  const ext = half * 1.6;
+  const lo0 = eRef - ext;
+  const hi0 = eRef + ext;
 
-  // 窗口边界（数据是单调电位，直接线性定位）
-  let lo = 0, hi = n - 1;
-  while (lo < n && volts[lo] < lo0) lo++;
-  while (hi >= 0 && volts[hi] > hi0) hi--;
+  // 窗口边界（数据是单调电位，直接线性定位）；两端各留 1 点用于判局部极大
+  let lo = 1, hi = n - 2;
+  while (lo < n - 2 && volts[lo] < lo0) lo++;
+  while (hi > 1 && volts[hi] > hi0) hi--;
   if (hi - lo < 4) return null;                    // 窗口内点数太少
 
-  // ② 窗口内找电流极大（比较用平滑后的曲线，抗噪）
+  // ② 搜索范围内找电流极大（比较用平滑后的曲线，抗噪）
   let pi = lo;
   for (let i = lo + 1; i <= hi; i++) if (y[i] > y[pi]) pi = i;
-  if (pi <= lo || pi >= hi) return null;           // 峰落在窗口边缘 → 不算
+
+  // 必须是真正的局部极大：两侧都更低。这样窗口边界上的"单调爬升"
+  // 不会被误当成峰（例如扫描末端电流还在往上走的那一段）
+  if (!(y[pi] > y[pi - 1] && y[pi] > y[pi + 1])) return null;
+  if (Math.abs(volts[pi] - eRef) > ext) return null;
 
   // ③ 两侧谷点：从峰顶沿下坡一直走到"真正拐平"的位置
   //    ── 允许微小回升（噪声/基线起伏），用峰高的 0.3% 作容差
@@ -3651,6 +3658,7 @@ function analyzePeakCHI(volts, y, eRef, half) {
   if (!isFinite(height) || height < PEAK_ALGO.minHeight) return null;
 
   return {
+    index: pi,
     potential: volts[pi],
     height: height,
     apex: apex.current,
@@ -3739,19 +3747,33 @@ function analyzeHeavyMetals(currents, scan, rows) {
   // ① 平滑：Savitzky–Golay，压掉采样毛刺
   const y = savgolSmooth(currents, PEAK_ALGO.sgWindow);
 
-  // ②③④ 逐个金属在各自的电位窗口内解析
+  // ②③④ 逐个金属在各自的电位窗口内解析，先收候选
+  const cands = [];
   list.forEach(function (row) {
     const ref = PEAK_REFERENCE[row.symbol];
     if (!ref) return;
     const half = (PEAK_ALGO.windowHalf > 0) ? PEAK_ALGO.windowHalf : ref.tolerance;
-
     const pk = analyzePeakCHI(volts, y, ref.peakV, half);
-    if (!pk) return;                     // 该金属没有峰 → 保持 --
+    if (pk) cands.push({ row: row, ref: ref, pk: pk });
+  });
 
+  // 同一个峰可能落在两个金属的搜索范围里：归给参考电位更近的那个
+  const byPeak = {};
+  cands.forEach(function (c) {
+    const k = c.pk.index;
+    const dist = Math.abs(c.pk.potential - c.ref.peakV);
+    if (!byPeak[k] || dist < Math.abs(byPeak[k].pk.potential - byPeak[k].ref.peakV)) {
+      byPeak[k] = c;
+    }
+  });
+
+  Object.keys(byPeak).forEach(function (k) {
+    const c = byPeak[k];
+    const row = c.row;
+    const pk = c.pk;
     row.potential = pk.potential.toFixed(3);
     row.peakCurrent = pk.height.toFixed(3);    // 基线校正后的峰高
     row.apexCurrent = pk.apex.toFixed(3);      // 峰顶绝对电流（画图用）
-    // 基线几何：画辅助线用
     row.baseline = {
       lx: pk.leftV, ly: pk.leftY,
       rx: pk.rightV, ry: pk.rightY,
