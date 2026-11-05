@@ -525,6 +525,9 @@ body {
 /* 浓度列需要容纳"数值 + 限值"两行 */
 .hm-card .tbl th:nth-child(3),
 .hm-card .tbl td:nth-child(3) { min-width: 96px; }
+/* 峰高列：上方峰高、下方峰顶电流，两行对齐 */
+.hm-card .tbl td.peak-cell { padding-bottom: 8px; }
+.hm-card .tbl td.peak-cell .conc-val { display: block; }
 .tbl .conc-cell.over .conc-lim { color: var(--red); font-weight: 600; }
 .tbl .conc-cell.over .conc-bar {
   background: linear-gradient(90deg, rgba(217, 45, 32, .78), rgba(248, 113, 113, .45));
@@ -3927,12 +3930,17 @@ function renderSpeciesInto(tbodyId, rows) {
     const lim = (isHit && th !== null)
       ? `<span class="conc-lim">限值 ${th.toFixed(2)}</span>`
       : '';
+    // 峰高是"基线校正后"的值；把峰顶绝对电流也标出来，
+    // 方便和曲线上的读数/十字准星对齐
+    const apexLine = (row.apexCurrent !== null && row.apexCurrent !== undefined)
+      ? `<span class="conc-lim">峰顶 ${cell(row.apexCurrent)}</span>`
+      : '';
     return `
     <tr class="${isHit ? 'hit' : ''}${over ? ' over' : ''}">
       <td class="metal">${escapeHtml(row.species)}</td>
       <td class="num${row.potential === null ? ' empty' : ''}">${cell(row.potential)}</td>
       <td class="num conc-cell${concCls(row.concentration)}${over ? ' over' : ''}">${bar}<span class="conc-val">${cell(row.concentration)}</span>${lim}</td>
-      <td class="num${row.peakCurrent === null ? ' empty' : ''}">${cell(row.peakCurrent)}</td>
+      <td class="num peak-cell${row.peakCurrent === null ? ' empty' : ''}"><span class="conc-val">${cell(row.peakCurrent)}</span>${apexLine}</td>
     </tr>`;
   }).join('');
 }
