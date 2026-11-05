@@ -3593,6 +3593,79 @@ function refineApex(volts, y, i) {
 }
 
 /**
+ * 在整条曲线上找出所有峰（不依赖金属参考表）。
+ * 判据：局部极大 + 基线校正后的峰高 ≥ minHeight + 与已保留峰相距 ≥ 0.03 V
+ * 每个峰都按辰华的方式配一条「两侧谷点」基线。
+ * @returns {Array<{index,potential,height,apex,baseline,leftV,rightV,leftY,rightY}>}
+ */
+function findAllPeaks(volts, y) {
+  const n = y.length;
+  if (n < 5) return [];
+
+  // 以曲线自身幅度定一个相对阈值，避免平坦段把噪声当峰
+  let ymin = Infinity, ymax = -Infinity;
+  for (let i = 0; i < n; i++) { if (y[i] < ymin) ymin = y[i]; if (y[i] > ymax) ymax = y[i]; }
+  const span = ymax - ymin;
+  const minH = Math.max(PEAK_ALGO.minHeight, span * 0.008);   // 幅度的 0.8%
+  const minSep = 0.03;                                        // V
+
+  const out = [];
+  for (let i = 1; i < n - 1; i++) {
+    if (!(y[i] > y[i - 1] && y[i] >= y[i + 1])) continue;
+
+    const pk = analyzePeakAt(volts, y, i);
+    if (!pk) continue;
+    if (pk.height < minH) continue;
+    if (out.some(function (o) { return Math.abs(o.potential - pk.potential) < minSep; })) continue;
+    out.push(pk);
+  }
+  return out;
+}
+
+/**
+ * 以指定索引为峰顶，解析一个峰（平滑曲线 + 两侧谷点基线 + 抛物线峰高）。
+ */
+function analyzePeakAt(volts, y, pi) {
+  const n = y.length;
+  if (pi <= 0 || pi >= n - 1) return null;
+
+  // 谷点：从峰顶沿下坡走到拐平处（允许噪声造成的微小回升）
+  const eps = Math.max(1e-6, (y[pi] - Math.min.apply(null, y)) * 0.003);
+  const maxWalk = Math.max(10, Math.min(120, Math.round(n * 0.45)));
+  const walk = function (dir) {
+    let i = pi, steps = 0, best = pi, bestY = y[pi];
+    while (steps < maxWalk) {
+      const next = i + dir;
+      if (next < 0 || next >= n) break;
+      if (y[next] > bestY + eps) break;
+      i = next; steps++;
+      if (y[i] < bestY) { bestY = y[i]; best = i; }
+    }
+    return best;
+  };
+  const li = walk(-1);
+  const ri = walk(+1);
+  if (ri <= li || li === pi || ri === pi) return null;
+
+  const ratio = (volts[pi] - volts[li]) / (volts[ri] - volts[li] || 1);
+  const base = y[li] + (y[ri] - y[li]) * ratio;
+
+  const apex = refineApex(volts, y, pi);
+  const height = apex.current - base;
+  if (!isFinite(height) || height <= 0) return null;
+
+  return {
+    index: pi,
+    potential: volts[pi],
+    height: height,
+    apex: apex.current,
+    baseline: base,
+    leftV: volts[li], rightV: volts[ri],
+    leftY: y[li], rightY: y[ri]
+  };
+}
+
+/**
  * 在 [eRef−half, eRef+half] 窗口内按辰华的方式解析一个峰。
  * @returns {{potential:number, height:number, apex:number, baseline:number,
  *            leftV:number, rightV:number}|null}
@@ -3734,6 +3807,7 @@ function analyzeHeavyMetals(currents, scan, rows) {
   });
 
   if (!currents || currents.length < 5 || !scan || !(scan.step > 0)) {
+    list.__peaks = [];
     return { ok: false, species: list };
   }
 
@@ -3747,30 +3821,28 @@ function analyzeHeavyMetals(currents, scan, rows) {
   // ① 平滑：Savitzky–Golay，压掉采样毛刺
   const y = savgolSmooth(currents, PEAK_ALGO.sgWindow);
 
-  // ②③④ 逐个金属在各自的电位窗口内解析，先收候选
-  const cands = [];
-  list.forEach(function (row) {
-    const ref = PEAK_REFERENCE[row.symbol];
-    if (!ref) return;
-    const half = (PEAK_ALGO.windowHalf > 0) ? PEAK_ALGO.windowHalf : ref.tolerance;
-    const pk = analyzePeakCHI(volts, y, ref.peakV, half);
-    if (pk) cands.push({ row: row, ref: ref, pk: pk });
+  // ② 全局找峰：不管有没有对应金属，先把所有峰都找出来
+  const peaks = findAllPeaks(volts, y);
+
+  // ③ 峰 → 金属：每个峰找"电位最近且未占用"的金属，距离上限 1.6×tolerance
+  const used = {};                       // symbol -> 已占用
+  peaks.forEach(function (pk) {
+    let best = null, bestDist = Infinity;
+    list.forEach(function (row) {
+      if (used[row.symbol]) return;
+      const ref = PEAK_REFERENCE[row.symbol];
+      if (!ref) return;
+      const half = (PEAK_ALGO.windowHalf > 0) ? PEAK_ALGO.windowHalf : ref.tolerance;
+      const dist = Math.abs(pk.potential - ref.peakV);
+      if (dist <= half * 1.6 && dist < bestDist) { best = row; bestDist = dist; }
+    });
+    if (best) { used[best.symbol] = true; pk.symbol = best.symbol; pk.row = best; }
   });
 
-  // 同一个峰可能落在两个金属的搜索范围里：归给参考电位更近的那个
-  const byPeak = {};
-  cands.forEach(function (c) {
-    const k = c.pk.index;
-    const dist = Math.abs(c.pk.potential - c.ref.peakV);
-    if (!byPeak[k] || dist < Math.abs(byPeak[k].pk.potential - byPeak[k].ref.peakV)) {
-      byPeak[k] = c;
-    }
-  });
-
-  Object.keys(byPeak).forEach(function (k) {
-    const c = byPeak[k];
-    const row = c.row;
-    const pk = c.pk;
+  // ④ 填表（只填被认领的峰）
+  peaks.forEach(function (pk) {
+    const row = pk.row;
+    if (!row) return;
     row.potential = pk.potential.toFixed(3);
     row.peakCurrent = pk.height.toFixed(3);    // 基线校正后的峰高
     row.apexCurrent = pk.apex.toFixed(3);      // 峰顶绝对电流（画图用）
@@ -3779,12 +3851,14 @@ function analyzeHeavyMetals(currents, scan, rows) {
       rx: pk.rightV, ry: pk.rightY,
       py: pk.baseline
     };
-
     const cal = CALIBRATION[row.symbol];
     if (!cal || !(cal.k > 0)) return;          // 未标定 → 浓度留 --
     const conc = (pk.height - cal.b) / cal.k;
     row.concentration = (isFinite(conc) && conc > 0) ? conc.toFixed(2) : '未检出';
   });
+
+  // 把所有峰挂到结果数组上，供画图使用（含未归属的峰）
+  list.__peaks = peaks;
 
   return { ok: true, species: list };
 }
@@ -5309,9 +5383,22 @@ function makePeakRich(over) {
  * 返回可以直接铺进 series 的引导系列数组。
  */
 function buildPeakGuideSeries(sourceRows) {
-  const rows = ((sourceRows || speciesRows) || []).filter(function (r) {
-    return r && r.baseline && r.potential !== null && r.apexCurrent !== null;
-  });
+  const src = (sourceRows || speciesRows) || [];
+  const peaks = src.__peaks;
+
+  // 有全局峰表时，所有峰（含未归属）都画基线
+  const items = (peaks && peaks.length)
+    ? peaks.map(function (pk) {
+        return {
+          potential: pk.potential, apexCurrent: pk.apex,
+          baseline: { lx: pk.leftV, ly: pk.leftY, rx: pk.rightV, ry: pk.rightY, py: pk.baseline }
+        };
+      })
+    : src.filter(function (r) {
+        return r && r.baseline && r.potential !== null && r.apexCurrent !== null;
+      });
+
+  const rows = items;
   if (!rows.length) return [];
 
   const mk = function (id, z, style, data) {
@@ -5392,9 +5479,65 @@ function buildPeakLines(sourceRows) {
 }
 
 function buildPeakMarks(sourceRows) {
-  const rows = ((sourceRows || speciesRows) || []).filter(function (r) {
+  const src = (sourceRows || speciesRows) || [];
+  const rows = src.filter(function (r) {
     return r && r.potential !== null && r.peakCurrent !== null;
   });
+
+  // 优先用"全局找峰"的结果：未归属到金属的峰也一起标出来
+  const peaks = src.__peaks;
+  if (peaks && peaks.length) {
+    return {
+      symbol: 'circle',
+      symbolSize: 7,
+      itemStyle: { color: '#1677ff', borderColor: '#fff', borderWidth: 2 },
+      emphasis: { scale: 1.3 },
+      label: {
+        show: true,
+        position: 'top',
+        distance: 9,
+        formatter: function (p) {
+          return '{s|' + p.data.name + '}{g| }' +
+            (p.data.val ? '\n{v|' + p.data.val + '}' : '');
+        },
+        rich: makePeakRich(false),
+        color: '#0f172a',
+        backgroundColor: 'rgba(255,255,255,.96)',
+        borderColor: '#dbe4f0',
+        borderWidth: 1,
+        borderRadius: 7,
+        padding: [5, 9],
+        shadowBlur: 10,
+        shadowColor: 'rgba(15, 23, 42, .12)',
+        shadowOffsetY: 2
+      },
+      data: peaks.map(function (pk) {
+        const row = pk.row || null;
+        const assigned = !!row;
+        const conc = (row && row.concentration !== null && row.concentration !== undefined)
+          ? String(row.concentration) : '';
+        const item = {
+          name: assigned ? row.species : '峰',
+          coord: [Number(pk.potential), Number(pk.apex)],
+          val: assigned
+            ? (conc ? conc + ' mg/kg' : '')
+            : (Number(pk.height).toFixed(2) + ' μA'),
+          tip: (assigned ? row.species : '未归属峰') +
+               ' ' + Number(pk.potential).toFixed(3) + ' V'
+        };
+        if (assigned && isOverLimit(row)) {
+          item.itemStyle = { color: '#dc2626', borderColor: '#fff', borderWidth: 2 };
+          item.label = { rich: makePeakRich(true) };
+        } else if (!assigned) {
+          // 未归属的峰：灰色标注，与已识别峰区分
+          item.itemStyle = { color: '#94a3b8', borderColor: '#fff', borderWidth: 2 };
+          item.label = { backgroundColor: 'rgba(248,250,252,.96)', borderColor: '#e2e8f0' };
+        }
+        return item;
+      })
+    };
+  }
+
   if (!rows.length) return { data: [] };
 
   return {
