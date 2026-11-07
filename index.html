@@ -5454,10 +5454,10 @@ function buildPeakGuideSeries(sourceRows) {
       { color: '#94a3b8', width: 1.2, type: 'dashed', opacity: .9 },
       [[b.lx - ext, b.ly - ext * slope], [b.rx + ext, b.ry + ext * slope]]));
 
-    // 连接线：左谷 → 峰顶 → 右谷（折线，一条 series 三个点不会串到别的峰）
+    // 连接线：只画左侧（左谷 → 峰顶），右侧不画
     out.push(mk('peakLink' + i, 3,
       { color: '#3b82f6', width: 1, type: 'dashed', opacity: .6 },
-      [[b.lx, b.ly], [ex, ey], [b.rx, b.ry]]));
+      [[b.lx, b.ly], [ex, ey]]));
 
     // 垂线：峰顶 → 基线
     out.push(mk('peakDrop' + i, 4,
