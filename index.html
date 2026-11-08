@@ -2433,6 +2433,112 @@ body.side-collapsed .nav-btn .ico { width: auto; }
 .hist-item.arsenic .type::before { background: #7a5af8; }
 .hist-item.arsenic::before { background: linear-gradient(180deg, #7a5af8, #a78bfa); }
 
+/* ===================== 选择检测物种 ===================== */
+.species-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.species-pick[hidden] { display: none; }
+.sp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sp-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.sp-head h3::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 13px;
+  margin-right: 8px;
+  border-radius: 2px;
+  vertical-align: -1px;
+  background: linear-gradient(180deg, #1677ff, #7a5af8);
+}
+.sp-count { font-size: 12.5px; color: var(--ink-4); }
+.sp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
+}
+.sp-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-lg);
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .16s, background .16s, box-shadow .16s, transform .16s;
+}
+.sp-card:hover { border-color: #cfe0fb; box-shadow: 0 6px 18px rgba(22, 119, 255, .10); }
+.sp-card .sym {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f4fd8;
+  background: rgba(22, 119, 255, .10);
+}
+.sp-card .meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sp-card .meta b { font-size: 14px; font-weight: 650; color: var(--ink); }
+.sp-card .meta span { font-size: 11.5px; color: var(--ink-4); font-family: var(--mono); }
+.sp-card .tick {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: transparent;
+}
+.sp-card.on {
+  border-color: #1677ff;
+  background: linear-gradient(160deg, rgba(22, 119, 255, .09) 0%, #fff 70%);
+}
+.sp-card.on .sym { background: linear-gradient(135deg, #1677ff, #7a5af8); color: #fff; }
+.sp-card.on .tick {
+  border-color: #1677ff;
+  background: #1677ff;
+  color: #fff;
+}
+.sp-card.on .tick::after { content: "✓"; }
+.sp-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.sp-actions .sp-next {
+  min-width: 190px;
+  height: 44px;
+  font-size: 14.5px;
+  font-weight: 600;
+  border-radius: 10px;
+}
+
 /* ===================== 响应式 ===================== */
 @media (max-width: 1180px) {
   #detectPage { min-height: 0; }
@@ -3003,6 +3109,7 @@ body.side-collapsed .nav-btn .ico { width: auto; }
           <div class="th-pill"><span id="taskHeroPoints">--</span> 点</div>
         </section>
 
+
         <div class="param-grid">
 
           <!-- 参数表单 -->
@@ -3050,6 +3157,20 @@ body.side-collapsed .nav-btn .ico { width: auto; }
           <button type="button" id="btnStart" class="btn btn-primary btn-run" onclick="startTask()">开始检测</button>
         </div>
       </div>
+
+        <!-- ---------- 选择检测物种 ---------- -->
+        <section class="species-pick" id="speciesPage" hidden>
+          <div class="sp-head">
+            <h3>选择检测物种</h3>
+            <span class="sp-count" id="spCount">已选 0 种</span>
+          </div>
+          <div class="sp-grid" id="spGrid"></div>
+          <div class="sp-actions">
+            <button type="button" class="btn" onclick="selectAllSpecies()">全选</button>
+            <button type="button" class="btn" onclick="clearAllSpecies()">清空</button>
+            <button type="button" class="btn btn-primary sp-next" onclick="speciesNext()">下一步：设置参数</button>
+          </div>
+        </section>
 
       <!-- ---------- 清洁结果页 ---------- -->
       <div id="cleanPage" class="hidden">
@@ -3498,11 +3619,18 @@ const ARSENIC_TASK_SPECIES = HEAVY_METAL_SPECIES.filter(it => it.symbol === 'As'
 
 /** 按任务类型取对应的金属清单 */
 function speciesForTask(taskType) {
-  return taskType === '砷检测' ? ARSENIC_TASK_SPECIES : MULTI_TASK_SPECIES;
+  if (taskType === '砷检测') return ARSENIC_TASK_SPECIES;
+  if (taskType === '清洁任务') return [];
+  // 检测任务：按用户在物种选择页的勾选，顺序沿用总表
+  const sel = (typeof selectedSymbols !== 'undefined' && selectedSymbols) || [];
+  return HEAVY_METAL_SPECIES.filter(it => sel.indexOf(it.symbol) >= 0);
 }
 
 /** 当前正在进行的任务类型（用于结果表列哪几种金属） */
 let activeTaskType = '检测任务';
+
+/** 检测任务里勾选要测的金属（在「选择检测物种」页修改） */
+let selectedSymbols = loadSpeciesSelection();
 
 /* =====================================================================
  * 重金属峰位参考
@@ -4343,6 +4471,7 @@ function showHome() {
   $('historyPage').classList.add('hidden');
   $('devicePage').classList.add('hidden');
   $('paramPage').classList.add('hidden');
+  hideSpeciesPage();
   $('cleanPage').classList.add('hidden');
   $('runPage').classList.add('hidden');
   try { syncTaskTheme(''); } catch (e) {}
@@ -4356,6 +4485,7 @@ function showDetectPage() {
   $('historyPage').classList.add('hidden');
   $('devicePage').classList.add('hidden');
   $('paramPage').classList.add('hidden');
+  hideSpeciesPage();
   $('cleanPage').classList.add('hidden');
   $('runPage').classList.add('hidden');
   try { syncTaskTheme(''); } catch (e) {}
@@ -4372,6 +4502,7 @@ function showHistoryPage() {
   $('historyPage').classList.remove('hidden');
   $('devicePage').classList.add('hidden');
   $('paramPage').classList.add('hidden');
+  hideSpeciesPage();
   $('cleanPage').classList.add('hidden');
   $('runPage').classList.add('hidden');
   try { syncTaskTheme(''); } catch (e) {}
@@ -4557,6 +4688,7 @@ function startTask() {
    * 参数弹窗保持在底下不关，取消后可以继续改参数。 */
   askConfirm(function () {
     $('paramPage').classList.add('hidden');
+  hideSpeciesPage();
     // 曲线右上角显示本次的沉积时间
     renderDepositTime(p.depositS);
     // 记下本次沉积时间，保存历史记录时一并写入（清洁任务无参数，置空）
@@ -4747,6 +4879,7 @@ function showCleanPage() {
   $('historyPage').classList.add('hidden');
   $('devicePage').classList.add('hidden');
   $('paramPage').classList.add('hidden');
+  hideSpeciesPage();
   $('runPage').classList.add('hidden');
   $('cleanPage').classList.remove('hidden');
   setPageHeader('清洁任务');
@@ -6364,6 +6497,100 @@ function syncTaskTheme(task) {
   }
 }
 
+/* =====================================================================
+ * 检测物种选择
+ * ---------------------------------------------------------------------
+ * 点「检测任务」先进入本页勾选要测的金属，再进入参数页。
+ * 勾选结果存 localStorage，下次进入沿用；历史记录里也会存一份。
+ * ===================================================================*/
+const SPECIES_SEL_KEY = 'swv_species_sel';
+const DEFAULT_SELECTED = ['Cd', 'Pb', 'Cu', 'Hg', 'Zn'];
+
+function loadSpeciesSelection() {
+  const KEY = 'swv_species_sel';
+  const DEF = ['Cd', 'Pb', 'Cu', 'Hg', 'Zn'];
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); }
+  catch (e) { saved = null; }
+  if (!Array.isArray(saved) || !saved.length) return DEF.slice();
+  // 只保留仍然存在的元素
+  const ok = saved.filter(sym => HEAVY_METAL_SPECIES.some(it => it.symbol === sym));
+  return ok.length ? ok : DEF.slice();
+}
+
+function saveSpeciesSelection() {
+  try { localStorage.setItem(SPECIES_SEL_KEY, JSON.stringify(selectedSymbols)); }
+  catch (e) { /* 存不下忽略 */ }
+}
+
+/** 渲染物种卡片 */
+function renderSpeciesPicker() {
+  const grid = $('spGrid');
+  if (!grid) return;
+  grid.innerHTML = HEAVY_METAL_SPECIES.map(function (it) {
+    const ref = PEAK_REFERENCE[it.symbol];
+    const on = selectedSymbols.indexOf(it.symbol) >= 0;
+    return '<button type="button" class="sp-card' + (on ? ' on' : '') + '"' +
+      ' data-sym="' + it.symbol + '" onclick="toggleSpecies(\'' + it.symbol + '\')">' +
+      '<span class="sym">' + it.symbol + '</span>' +
+      '<span class="meta"><b>' + it.species + '</b>' +
+      '<span>' + (ref ? ref.peakV.toFixed(2) + ' V' : '--') + '</span></span>' +
+      '<span class="tick"></span></button>';
+  }).join('');
+  const cnt = $('spCount');
+  if (cnt) cnt.textContent = '已选 ' + selectedSymbols.length + ' 种';
+}
+
+function toggleSpecies(sym) {
+  const i = selectedSymbols.indexOf(sym);
+  if (i >= 0) selectedSymbols.splice(i, 1);
+  else selectedSymbols.push(sym);
+  saveSpeciesSelection();
+  renderSpeciesPicker();
+}
+
+function selectAllSpecies() {
+  selectedSymbols = HEAVY_METAL_SPECIES.map(it => it.symbol);
+  saveSpeciesSelection();
+  renderSpeciesPicker();
+}
+
+function clearAllSpecies() {
+  selectedSymbols = [];
+  saveSpeciesSelection();
+  renderSpeciesPicker();
+}
+
+/** 打开物种选择页 */
+function showSpeciesPage() {
+  resetScrollIfSwitching('speciesPage');
+  ['homePage', 'detectPage', 'historyPage', 'devicePage', 'paramPage', 'cleanPage', 'runPage']
+    .forEach(function (id) { const el = $(id); if (el) el.classList.add('hidden'); });
+  // 先定导航高亮（它会顺带改标题），再覆盖成本页标题
+  setActiveNav('navDetect');
+  syncHomeBtn(false);
+  setPageHeader('选择检测物种');
+  try { syncTaskTheme('DETECTION'); } catch (e) {}
+  const page = $('speciesPage');
+  if (page) { page.hidden = false; page.classList.remove('hidden'); }
+  renderSpeciesPicker();
+}
+
+function hideSpeciesPage() {
+  const page = $('speciesPage');
+  if (page) { page.hidden = true; page.classList.add('hidden'); }
+}
+
+/** 下一步：带着勾选结果进入参数页 */
+function speciesNext() {
+  if (!selectedSymbols.length) {
+    showTip('请先选择物种', '至少勾选一种要检测的金属');
+    return;
+  }
+  hideSpeciesPage();
+  showParamPage('DETECTION');
+}
+
 /** 打开参数页 */
 function showParamPage(task) {
   if (!isConnected()) {
@@ -6394,6 +6621,7 @@ function showParamPage(task) {
     const el = $(id);
     if (el) el.classList.add('hidden');
   });
+  hideSpeciesPage();
   $('paramPage').classList.remove('hidden');
   // 检测 / 清洁 用两套主题色，避免两个参数页看起来一样
   $('paramPage').classList.toggle('task-clean', task === 'CLEAN');
@@ -6434,6 +6662,7 @@ function showParamPage(task) {
 /** 关闭参数页：回到来源页面 */
 function closeParamPage() {
   $('paramPage').classList.add('hidden');
+  hideSpeciesPage();
   currentTask = '';
   const back = paramFromPage || 'homePage';
   if (back === 'detectPage') { showDetectPage(); return; }
@@ -6688,6 +6917,7 @@ function showDevicePage() {
   $('historyPage').classList.add('hidden');
   $('devicePage').classList.remove('hidden');
   $('paramPage').classList.add('hidden');
+  hideSpeciesPage();
   $('cleanPage').classList.add('hidden');
   $('runPage').classList.add('hidden');
   try { syncTaskTheme(''); } catch (e) {}
@@ -7068,9 +7298,12 @@ function navHome() {
 /** 侧边栏"检测任务"：未连接时由 selectMode 给出提示 */
 function navDetect() {
   cancelAutoReturn();
-  // 不在这里改高亮：showParamPage 内部有"未连接"守卫，
-  // 守卫拦下时如果先切了高亮，会出现"内容还是主界面、侧栏却停在检测任务"的错位。
-  selectMode('DETECTION');
+  if (!isConnected()) {
+    showTip('请先连接设备', '执行检测/清洁任务前，请先连接设备');
+    return;
+  }
+  // 先进「选择检测物种」，下一步再到参数设置
+  showSpeciesPage();
 }
 /** 侧边栏"清洁任务" */
 function navAs() {
