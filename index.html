@@ -2929,7 +2929,7 @@ body.side-collapsed .nav-btn .ico { width: auto; }
               <div class="metrics">
                     <div class="metric m-scan"><div class="k">扫描范围</div><div id="voltRange" class="v">--</div></div>
                 <div class="metric m-scan"><div class="k">阶跃步长</div><div id="stepSize" class="v">--</div></div>
-                <div class="metric m-cur"><div class="k">峰值电流 (μA)</div><div id="valMax" class="v accent">--</div></div>
+                <div class="metric m-cur"><div class="k">峰高 (μA)</div><div id="valMax" class="v accent">--</div></div>
                 <div class="metric m-cur"><div class="k">谷值电流 (μA)</div><div id="valMin" class="v">--</div></div>
                 <div class="metric m-cur"><div class="k">平均值 (μA)</div><div id="valAvg" class="v">--</div></div>
                 <div class="metric m-cur"><div class="k">峰谷差 ΔI (μA)</div><div id="valDelta" class="v">--</div></div>
@@ -2989,7 +2989,7 @@ body.side-collapsed .nav-btn .ico { width: auto; }
               <div class="card-head"><h3>数据统计</h3></div>
               <div class="metrics" style="grid-template-columns: repeat(3, 1fr);">
                 <div class="metric m-scan"><div class="k">扫描范围</div><div id="hisVoltRange" class="v">--</div></div>
-                <div class="metric m-cur"><div class="k">峰值电流 (μA)</div><div id="hisValMax" class="v accent">--</div></div>
+                <div class="metric m-cur"><div class="k">峰高 (μA)</div><div id="hisValMax" class="v accent">--</div></div>
                 <div class="metric m-cur"><div class="k">平均值 (μA)</div><div id="hisValAvg" class="v">--</div></div>
               </div>
             </section>
@@ -4245,17 +4245,13 @@ function renderSpeciesInto(tbodyId, rows) {
     const lim = (isHit && th !== null)
       ? `<span class="conc-lim">限值 ${th.toFixed(2)}</span>`
       : '';
-    // 峰高是"基线校正后"的值；把峰顶绝对电流也标出来，
-    // 方便和曲线上的读数/十字准星对齐
-    const apexLine = (row.apexCurrent !== null && row.apexCurrent !== undefined)
-      ? `<span class="conc-lim">峰顶 ${cell(row.apexCurrent)}</span>`
-      : '';
+    // 峰高一律是"扣掉基线"之后的值，不再显示未扣基线的峰顶电流
     return `
     <tr class="${isHit ? 'hit' : ''}${over ? ' over' : ''}">
       <td class="metal">${escapeHtml(row.species)}</td>
       <td class="num${row.potential === null ? ' empty' : ''}">${cell(row.potential)}</td>
       <td class="num conc-cell${concCls(row.concentration)}${over ? ' over' : ''}">${bar}<span class="conc-val">${cell(row.concentration)}</span>${lim}</td>
-      <td class="num peak-cell${row.peakCurrent === null ? ' empty' : ''}"><span class="conc-val">${cell(row.peakCurrent)}</span>${apexLine}</td>
+      <td class="num${row.peakCurrent === null ? ' empty' : ''}">${cell(row.peakCurrent)}</td>
     </tr>`;
   }).join('');
 }
@@ -5979,7 +5975,16 @@ function drawCurve(nums) {
   if (depEl) depEl.textContent = (activeDepositS != null && Number(activeDepositS) > 0)
     ? String(activeDepositS) : '--';
 
-  $('valMax').textContent = max.toFixed(2);
+  // 峰值电流：取已识别峰里最大的「扣基线峰高」，没有识别到峰就显示 --
+  let maxHeight = null;
+  try {
+    const pks = (speciesRows && speciesRows.__peaks) || [];
+    const hs = pks.filter(function (p) { return p.row && isFinite(p.height); })
+                   .map(function (p) { return p.height; });
+    if (hs.length) maxHeight = Math.max.apply(null, hs);
+  } catch (e) { maxHeight = null; }
+
+  $('valMax').textContent = maxHeight !== null ? maxHeight.toFixed(2) : '--';
   $('valMin').textContent = min.toFixed(2);
   $('valAvg').textContent = avg.toFixed(2);
   $('valDelta').textContent = (max - min).toFixed(2);
@@ -6196,7 +6201,18 @@ function updateHistoryStats(item) {
   const n = item.data.length;
   const currents = item.data.map(currentFromRaw);
   $('hisVoltRange').textContent = item.startVolt + ' ~ ' + item.endVolt + ' V';
-  $('hisValMax').textContent = Math.max.apply(null, currents).toFixed(2);
+
+  // 峰值电流 = 扣基线后的峰高（与结果表一致）
+  let maxHeight = null;
+  try {
+    const rows = speciesRowsOfHistory(item);
+    const hs = (rows.__peaks || []).filter(function (p) {
+      return p.row && isFinite(p.height);
+    }).map(function (p) { return p.height; });
+    if (hs.length) maxHeight = Math.max.apply(null, hs);
+  } catch (e) { maxHeight = null; }
+
+  $('hisValMax').textContent = maxHeight !== null ? maxHeight.toFixed(2) : '--';
   $('hisValAvg').textContent = (currents.reduce((a, b) => a + b, 0) / n).toFixed(2);
 }
 
