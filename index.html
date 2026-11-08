@@ -3859,6 +3859,75 @@ function refineApex(volts, y, i) {
 }
 
 /**
+ * 峰 → 金属 的保序最优匹配（动态规划）。
+ * 物理上溶出峰按电位顺序排列，所以只允许"顺序对齐"，不允许交叉。
+ * 允许跳过峰（杂峰）或跳过金属（该金属未检出），
+ * 匹配代价 = |峰位 − 参考峰位|，跳过代价 = SKIP_COST。
+ * @returns {Map<peak, row>}
+ */
+function assignPeaksToMetals(peaks, rows) {
+  const MAP_MAX = 0.45;    // 单对最大允许偏差（V）
+  const SKIP_COST = 0.6;   // 跳过一个峰/一个金属的代价
+
+  const P = peaks.slice().sort((a, b) => a.potential - b.potential);
+  const M = rows.slice().sort(function (a, b) {
+    const ra = PEAK_REFERENCE[a.symbol], rb = PEAK_REFERENCE[b.symbol];
+    return (ra ? ra.peakV : 0) - (rb ? rb.peakV : 0);
+  });
+
+  const n = P.length, m = M.length;
+  const INF = 1e9;
+  const dp = [];
+  const act = [];
+  for (let i = 0; i <= n; i++) {
+    dp.push(new Array(m + 1).fill(INF));
+    act.push(new Array(m + 1).fill(null));
+  }
+  dp[0][0] = 0;
+
+  for (let i = 0; i <= n; i++) {
+    for (let j = 0; j <= m; j++) {
+      const cur = dp[i][j];
+      if (cur >= INF) continue;
+
+      // 跳过第 i 个峰
+      if (i < n && cur + SKIP_COST < dp[i + 1][j]) {
+        dp[i + 1][j] = cur + SKIP_COST;
+        act[i + 1][j] = 'skipPeak';
+      }
+      // 跳过第 j 个金属
+      if (j < m && cur + SKIP_COST < dp[i][j + 1]) {
+        dp[i][j + 1] = cur + SKIP_COST;
+        act[i][j + 1] = 'skipMetal';
+      }
+      // 匹配
+      if (i < n && j < m) {
+        const ref = PEAK_REFERENCE[M[j].symbol];
+        if (ref) {
+          const d = Math.abs(P[i].potential - ref.peakV);
+          if (d <= MAP_MAX && cur + d < dp[i + 1][j + 1]) {
+            dp[i + 1][j + 1] = cur + d;
+            act[i + 1][j + 1] = 'match';
+          }
+        }
+      }
+    }
+  }
+
+  // 回溯
+  const out = new Map();
+  let i = n, j = m;
+  while (i > 0 || j > 0) {
+    const a = act[i][j];
+    if (a === 'match') { out.set(P[i - 1], M[j - 1]); i--; j--; }
+    else if (a === 'skipPeak') { i--; }
+    else if (a === 'skipMetal') { j--; }
+    else { break; }
+  }
+  return out;
+}
+
+/**
  * 在整条曲线上找出所有峰（不依赖金属参考表）。
  * 判据：局部极大 + 基线校正后的峰高 ≥ minHeight + 与已保留峰相距 ≥ 0.03 V
  * 每个峰都按辰华的方式配一条「两侧谷点」基线。
@@ -4102,19 +4171,11 @@ function analyzeHeavyMetals(currents, scan, rows) {
   // ② 全局找峰：不管有没有对应金属，先把所有峰都找出来
   const peaks = findAllPeaks(volts, y, currents);
 
-  // ③ 峰 → 金属：每个峰找"电位最近且未占用"的金属，距离上限 1.6×tolerance
-  const used = {};                       // symbol -> 已占用
-  peaks.forEach(function (pk) {
-    let best = null, bestDist = Infinity;
-    list.forEach(function (row) {
-      if (used[row.symbol]) return;
-      const ref = PEAK_REFERENCE[row.symbol];
-      if (!ref) return;
-      const half = (PEAK_ALGO.windowHalf > 0) ? PEAK_ALGO.windowHalf : ref.tolerance;
-      const dist = Math.abs(pk.potential - ref.peakV);
-      if (dist <= half * 1.6 && dist < bestDist) { best = row; bestDist = dist; }
-    });
-    if (best) { used[best.symbol] = true; pk.symbol = best.symbol; pk.row = best; }
+  // ③ 峰 → 金属：按电位顺序做最优匹配（允许跳过杂峰/未检出的金属）
+  const pairing = assignPeaksToMetals(peaks, list);
+  pairing.forEach(function (row, pk) {
+    pk.symbol = row.symbol;
+    pk.row = row;
   });
 
   // ④ 填表（只填被认领的峰）
