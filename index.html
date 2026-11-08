@@ -3232,7 +3232,7 @@ body.side-collapsed .nav-btn .ico { width: auto; }
                 </svg>
               </span>
               <span class="spm-body">
-                <span class="spm-title">砷单独检测</span>
+                <span class="spm-title">砷检测</span>
                 <span class="spm-chips" id="spmChipsAs"></span>
               </span>
               <span class="spm-arrow">
@@ -6618,7 +6618,7 @@ function syncTaskTheme(task) {
   if (title) title.textContent = isClean ? '清洁任务' : (isArsenic ? '砷检测' : '检测任务');
 
   const sub = $('taskHeroSub');
-  if (sub) sub.textContent = isClean ? '清洗参数设置' : (isArsenic ? '单独测砷参数' : '五种金属参数');
+  if (sub) sub.textContent = isClean ? '清洗参数设置' : (isArsenic ? '砷检测参数' : '五种金属参数');
 
   const tag = $('taskTag');
   if (tag) {
