@@ -2405,6 +2405,10 @@ body.side-collapsed .nav-btn .ico { width: auto; }
 .btn { height: 32px; }
 .btn-sm { height: 27px; }
 
+@media (max-width: 900px) {
+  .sp-modes { grid-template-columns: 1fr; }
+}
+
 /* 砷检测：紫色主题 */
 #paramPage.task-arsenic .param-grid .card::before,
 #paramPage.task-arsenic .card-head h3::before {
@@ -2463,97 +2467,86 @@ body.side-collapsed .nav-btn .ico { width: auto; }
   background: linear-gradient(180deg, #1677ff, #7a5af8);
 }
 .sp-count { font-size: 12.5px; color: var(--ink-4); }
-.sp-grid {
+.sp-modes {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
 }
-.sp-grid-single { grid-template-columns: minmax(0, 260px); }
-.sp-group { display: flex; flex-direction: column; gap: 10px; }
-.sp-group-head {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink-3);
-  letter-spacing: .3px;
-}
-.sp-group-head em {
-  font-style: normal;
-  font-weight: 400;
-  font-size: 11.5px;
-  color: var(--ink-4);
-  margin-left: 8px;
-}
-.sp-card {
-  position: relative;
+.sp-mode {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px 22px 18px;
   border: 1.5px solid var(--line);
   border-radius: var(--r-lg);
   background: #fff;
-  cursor: pointer;
   text-align: left;
-  transition: border-color .16s, background .16s, box-shadow .16s, transform .16s;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .16s, box-shadow .16s, transform .16s;
 }
-.sp-card:hover { border-color: #cfe0fb; box-shadow: 0 6px 18px rgba(22, 119, 255, .10); }
-.sp-card .sym {
+.sp-mode:hover { transform: translateY(-2px); }
+.spm-head { display: flex; align-items: center; gap: 12px; }
+.spm-ico {
   flex: none;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  font-family: var(--mono);
-  font-size: 15px;
-  font-weight: 700;
-  color: #1f4fd8;
-  background: rgba(22, 119, 255, .10);
-}
-.sp-card .meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.sp-card .meta b { font-size: 14px; font-weight: 650; color: var(--ink); }
-.sp-card .meta span { font-size: 11.5px; color: var(--ink-4); font-family: var(--mono); }
-.sp-card .tick {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1.5px solid var(--line);
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  color: transparent;
-}
-.sp-card.on {
-  border-color: #1677ff;
-  background: linear-gradient(160deg, rgba(22, 119, 255, .09) 0%, #fff 70%);
-}
-.sp-card.on .sym { background: linear-gradient(135deg, #1677ff, #7a5af8); color: #fff; }
-.sp-card.on .tick {
-  border-color: #1677ff;
-  background: #1677ff;
+  border-radius: 13px;
   color: #fff;
 }
-.sp-card.on .tick::after { content: "✓"; }
-.sp-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-content: flex-end;
+.spm-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.spm-title b { font-size: 15.5px; font-weight: 700; color: var(--ink); }
+.spm-title span { font-size: 12px; color: var(--ink-4); }
+.spm-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.spm-chips .chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: #f6f8fc;
+  border: 1px solid var(--line-soft);
 }
-.sp-actions .sp-next {
-  min-width: 190px;
-  height: 44px;
-  font-size: 14.5px;
+.spm-chips .chip b {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+.spm-chips .chip i {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-5);
+}
+.spm-go {
+  margin-top: 2px;
+  font-size: 13px;
   font-weight: 600;
-  border-radius: 10px;
 }
 
+/* 左：五种金属（蓝紫） */
+.sp-mode-five .spm-ico { background: linear-gradient(135deg, #1677ff, #7a5af8); }
+.sp-mode-five .spm-chips .chip b { color: #1f4fd8; }
+.sp-mode-five .spm-go { color: #1677ff; }
+.sp-mode-five:hover {
+  border-color: #b9d3fb;
+  box-shadow: 0 12px 30px rgba(22, 119, 255, .16);
+}
+
+/* 右：砷（紫） */
+.sp-mode-as .spm-ico { background: linear-gradient(135deg, #7a5af8, #a78bfa); }
+.sp-mode-as .spm-chips .chip b { color: #5b3fd6; }
+.sp-mode-as .spm-go { color: #7a5af8; }
+.sp-mode-as:hover {
+  border-color: #ddd2fd;
+  box-shadow: 0 12px 30px rgba(122, 90, 248, .18);
+}
 /* ===================== 响应式 ===================== */
 @media (max-width: 1180px) {
   #detectPage { min-height: 0; }
@@ -3166,21 +3159,44 @@ body.side-collapsed .nav-btn .ico { width: auto; }
         <!-- ---------- 选择检测物种 ---------- -->
         <section class="species-pick" id="speciesPage" hidden>
           <div class="sp-head">
-            <h3>选择检测物种</h3>
-            <span class="sp-count" id="spCount">已选 0 种</span>
+            <h3>选择检测模式</h3>
+            <span class="sp-count">左侧：五种一起测　·　右侧：砷单独测</span>
           </div>
-          <div class="sp-group">
-            <div class="sp-group-head">五种金属 · 一起检测</div>
-            <div class="sp-grid" id="spGridFive"></div>
-          </div>
-          <div class="sp-group">
-            <div class="sp-group-head">砷 · 单独检测 <em>与汞、铜峰位接近，需换电极单独测</em></div>
-            <div class="sp-grid sp-grid-single" id="spGridAs"></div>
-          </div>
-          <div class="sp-actions">
-            <button type="button" class="btn" onclick="selectAllSpecies()">全选</button>
-            <button type="button" class="btn" onclick="clearAllSpecies()">清空</button>
-            <button type="button" class="btn btn-primary sp-next" onclick="speciesNext()">下一步：设置参数</button>
+          <div class="sp-modes">
+            <button type="button" class="sp-mode sp-mode-five" onclick="chooseDetectMode('DETECTION')">
+              <div class="spm-head">
+                <span class="spm-ico">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12h4l2.5-7 4 14 2.5-7h7"/>
+                  </svg>
+                </span>
+                <div class="spm-title">
+                  <b>五种金属检测</b>
+                  <span>一次扫描同时测定五种元素</span>
+                </div>
+              </div>
+              <div class="spm-chips" id="spmChipsFive"></div>
+              <span class="spm-go">进入参数设置 →</span>
+            </button>
+
+            <button type="button" class="sp-mode sp-mode-as" onclick="chooseDetectMode('ARSENIC')">
+              <div class="spm-head">
+                <span class="spm-ico">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3.5c-2.2 2.6-3.3 4.7-3.3 6.3a3.3 3.3 0 0 0 6.6 0c0-1.6-1.1-3.7-3.3-6.3z"/>
+                    <path d="M12 13.5V21"/>
+                  </svg>
+                </span>
+                <div class="spm-title">
+                  <b>砷单独检测</b>
+                  <span>与汞、铜峰位接近，需换电极单独测</span>
+                </div>
+              </div>
+              <div class="spm-chips" id="spmChipsAs"></div>
+              <span class="spm-go">进入参数设置 →</span>
+            </button>
           </div>
         </section>
 
@@ -3633,9 +3649,7 @@ const ARSENIC_TASK_SPECIES = HEAVY_METAL_SPECIES.filter(it => it.symbol === 'As'
 function speciesForTask(taskType) {
   if (taskType === '砷检测') return ARSENIC_TASK_SPECIES;
   if (taskType === '清洁任务') return [];
-  // 检测任务：按用户在物种选择页的勾选，顺序沿用总表
-  const sel = (typeof selectedSymbols !== 'undefined' && selectedSymbols) || [];
-  return HEAVY_METAL_SPECIES.filter(it => sel.indexOf(it.symbol) >= 0);
+  return MULTI_TASK_SPECIES;   // 检测任务固定五种
 }
 
 /** 当前正在进行的任务类型（用于结果表列哪几种金属） */
@@ -6535,67 +6549,23 @@ function saveSpeciesSelection() {
   catch (e) { /* 存不下忽略 */ }
 }
 
-/** 渲染物种卡片（分两组：五种金属 / 砷） */
+/** 渲染两种检测模式的面板内容（静态展示每种模式包含的金属） */
 function renderSpeciesPicker() {
-  const cardHtml = function (it) {
+  const chip = function (it) {
     const ref = PEAK_REFERENCE[it.symbol];
-    const on = selectedSymbols.indexOf(it.symbol) >= 0;
-    return '<button type="button" class="sp-card' + (on ? ' on' : '') + '"' +
-      ' data-sym="' + it.symbol + '" onclick="toggleSpecies(\'' + it.symbol + '\')">' +
-      '<span class="sym">' + it.symbol + '</span>' +
-      '<span class="meta"><b>' + it.species + '</b>' +
-      '<span>' + (ref ? ref.peakV.toFixed(2) + ' V' : '--') + '</span></span>' +
-      '<span class="tick"></span></button>';
+    return '<span class="chip"><b>' + it.symbol + '</b>' + it.species +
+      '<i>' + (ref ? ref.peakV.toFixed(2) + ' V' : '--') + '</i></span>';
   };
-
-  const five = $('spGridFive');
-  if (five) five.innerHTML = MULTI_TASK_SPECIES.map(cardHtml).join('');
-  const asOne = $('spGridAs');
-  if (asOne) asOne.innerHTML = ARSENIC_TASK_SPECIES.map(cardHtml).join('');
-
-  const cnt = $('spCount');
-  if (cnt) {
-    cnt.textContent = isArsenicSelected()
-      ? '砷单独检测'
-      : '已选 ' + selectedSymbols.length + ' 种';
-  }
+  const five = $('spmChipsFive');
+  if (five) five.innerHTML = MULTI_TASK_SPECIES.map(chip).join('');
+  const asOne = $('spmChipsAs');
+  if (asOne) asOne.innerHTML = ARSENIC_TASK_SPECIES.map(chip).join('');
 }
 
-/** 当前是否处于"砷单独检测"模式 */
-function isArsenicSelected() {
-  return selectedSymbols.length === 1 && selectedSymbols[0] === 'As';
-}
-
-function toggleSpecies(sym) {
-  const i = selectedSymbols.indexOf(sym);
-
-  if (sym === 'As') {
-    // 砷与五种互斥：选中砷就清掉其它，取消则回到空
-    selectedSymbols = (i >= 0) ? [] : ['As'];
-  } else {
-    // 选五种里的任意一个时，自动退出砷模式
-    if (i >= 0) {
-      selectedSymbols.splice(i, 1);
-    } else {
-      selectedSymbols = selectedSymbols.filter(s => s !== 'As');
-      selectedSymbols.push(sym);
-    }
-  }
-  saveSpeciesSelection();
-  renderSpeciesPicker();
-}
-
-function selectAllSpecies() {
-  // "全选"只作用于五种金属那一组（砷是单独的入口）
-  selectedSymbols = MULTI_TASK_SPECIES.map(it => it.symbol);
-  saveSpeciesSelection();
-  renderSpeciesPicker();
-}
-
-function clearAllSpecies() {
-  selectedSymbols = [];
-  saveSpeciesSelection();
-  renderSpeciesPicker();
+/** 选择某种检测模式 → 进入对应参数页 */
+function chooseDetectMode(task) {
+  hideSpeciesPage();
+  showParamPage(task);
 }
 
 /** 打开物种选择页 */
@@ -6606,7 +6576,7 @@ function showSpeciesPage() {
   // 先定导航高亮（它会顺带改标题），再覆盖成本页标题
   setActiveNav('navDetect');
   syncHomeBtn(false);
-  setPageHeader('选择检测物种');
+  setPageHeader('选择检测模式');
   try { syncTaskTheme('DETECTION'); } catch (e) {}
   const page = $('speciesPage');
   if (page) { page.hidden = false; page.classList.remove('hidden'); }
@@ -6616,16 +6586,6 @@ function showSpeciesPage() {
 function hideSpeciesPage() {
   const page = $('speciesPage');
   if (page) { page.hidden = true; page.classList.add('hidden'); }
-}
-
-/** 下一步：带着勾选结果进入参数页 */
-function speciesNext() {
-  if (!selectedSymbols.length) {
-    showTip('请先选择物种', '至少勾选一种要检测的金属');
-    return;
-  }
-  hideSpeciesPage();
-  showParamPage(isArsenicSelected() ? 'ARSENIC' : 'DETECTION');
 }
 
 /** 打开参数页 */
