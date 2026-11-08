@@ -376,7 +376,7 @@ body {
 /* 模式卡片：纯白 + 细边框，悬浮时描边变蓝 */
 .mode-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
 }
 .mode-card {
@@ -2348,6 +2348,15 @@ body.side-collapsed .nav-btn .ico { width: auto; }
   white-space: nowrap;
 }
 .task-tag.clean { background: linear-gradient(135deg, #0d9488, #2bb3a3); }
+.task-tag.arsenic { background: linear-gradient(135deg, #7a5af8, #a78bfa); }
+.task-hero.hero-clean {
+  background: linear-gradient(115deg, #0d9488 0%, #14a89a 50%, #2bb3a3 100%);
+  box-shadow: 0 8px 22px rgba(13, 148, 136, .26);
+}
+.task-hero.hero-arsenic {
+  background: linear-gradient(115deg, #7a5af8 0%, #8b6cff 50%, #a78bfa 100%);
+  box-shadow: 0 8px 22px rgba(122, 90, 248, .26);
+}
 
 /* 近 7 天检测量柱状条 */
 .home-week {
@@ -2395,6 +2404,34 @@ body.side-collapsed .nav-btn .ico { width: auto; }
 /* 按钮尺寸统一 */
 .btn { height: 32px; }
 .btn-sm { height: 27px; }
+
+/* 砷检测：紫色主题 */
+#paramPage.task-arsenic .param-grid .card::before,
+#paramPage.task-arsenic .card-head h3::before {
+  background: linear-gradient(90deg, #7a5af8, #a78bfa);
+}
+#paramPage.task-arsenic .param-actions .btn-run {
+  background: linear-gradient(180deg, #8b6cff, #7a5af8);
+  border-color: #7a5af8;
+  box-shadow: 0 6px 18px rgba(122, 90, 248, .30);
+}
+#paramPage.task-arsenic #paramForm input:focus {
+  border-color: #7a5af8;
+  box-shadow: 0 0 0 3px rgba(122, 90, 248, .16);
+}
+#paramPage.task-arsenic #paramPageTitle { color: #5b3fd6; }
+
+.nav-btn#navAs.active { background: rgba(122, 90, 248, .14); color: #5b3fd6; }
+
+.mode-card.mc-violet {
+  background: linear-gradient(160deg, rgba(122, 90, 248, .16) 0%, rgba(122, 90, 248, .03) 62%, #fff 100%);
+  border-color: rgba(122, 90, 248, .24);
+}
+
+/* 历史条目：砷检测用紫色 */
+.hist-item.arsenic .type { color: #5b3fd6; }
+.hist-item.arsenic .type::before { background: #7a5af8; }
+.hist-item.arsenic::before { background: linear-gradient(180deg, #7a5af8, #a78bfa); }
 
 /* ===================== 响应式 ===================== */
 @media (max-width: 1180px) {
@@ -2527,6 +2564,9 @@ body.side-collapsed .nav-btn .ico { width: auto; }
       <button type="button" class="nav-btn" id="navClean" onclick="navClean()">
         <span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 6.9 8.9a7.2 7.2 0 1 0 10.2 0z"/></svg></span><span>清洁任务</span>
       </button>
+      <button type="button" class="nav-btn" id="navAs" onclick="navAs()">
+        <span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5c-2.2 2.6-3.3 4.7-3.3 6.3a3.3 3.3 0 0 0 6.6 0c0-1.6-1.1-3.7-3.3-6.3z"/><path d="M12 13.5V21"/></svg></span><span>砷检测</span>
+      </button>
       <div class="side-label">数据</div>
       <button type="button" class="nav-btn" id="navHistory" onclick="navHistory()">
         <span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg></span><span>历史记录</span>
@@ -2612,6 +2652,13 @@ body.side-collapsed .nav-btn .ico { width: auto; }
             <b>清洁任务</b>
             <span class="ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 6.9 8.9a7.2 7.2 0 1 0 10.2 0z"/></svg></span>
             <span class="go" style="color:#16a34a;">开始清洁 →</span>
+          </button>
+
+          <button type="button" class="mode-card mc-violet" onclick="navAs()">
+            <span class="ico" style="color:#7a5af8;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5c-2.2 2.6-3.3 4.7-3.3 6.3a3.3 3.3 0 0 0 6.6 0c0-1.6-1.1-3.7-3.3-6.3z"/><path d="M12 13.5V21"/></svg></span>
+            <b>砷检测</b>
+            <span class="ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5c-2.2 2.6-3.3 4.7-3.3 6.3a3.3 3.3 0 0 0 6.6 0c0-1.6-1.1-3.7-3.3-6.3z"/><path d="M12 13.5V21"/></svg></span>
+            <span class="go" style="color:#7a5af8;">单独检测 →</span>
           </button>
 
           <button type="button" class="mode-card mc-amber" onclick="navHistory()">
@@ -3128,7 +3175,8 @@ const PROTOCOL = {
    * -------------------------------------------------------------------*/
   task: {
     DETECTION: { head: '@M0@S', tail: '&@W', label: '检测任务', action: '开始检测', withParams: true },
-    CLEAN:     { head: '@M5@S', tail: '&@W', label: '清洁任务', action: '开始清洁', withParams: true }
+    CLEAN:     { head: '@M5@S', tail: '&@W', label: '清洁任务', action: '开始清洁', withParams: true },
+    ARSENIC:   { head: '@M0@S', tail: '&@W', label: '砷检测',   action: '开始检测', withParams: true }
   },
   /* 取消帧：手册未给出停止指令。
    * 注意不能用 @W 开头 —— @W 本身是"启动 SWV"，会把取消变成再启动一次。
@@ -3429,6 +3477,12 @@ function hideRawWarn() {
  *   曲线数据 → analyzeHeavyMetals() → 峰识别 / 基线校正 / 方程反解
  *            → 返回填充后的完整列表 → renderSpeciesInto() 渲染
  * ===================================================================*/
+/**
+ * 砷与汞、铜的溶出峰电位很接近，同一根电极上容易互相误判，
+ * 因此拆成两个入口：
+ *   检测任务 —— 镉/铅/铜/汞/锌 五种一起测
+ *   砷检测   —— 单独测砷（不同电极、单独参数）
+ */
 const HEAVY_METAL_SPECIES = [
   { species: '镉', symbol: 'Cd' },
   { species: '铅', symbol: 'Pb' },
@@ -3437,6 +3491,18 @@ const HEAVY_METAL_SPECIES = [
   { species: '砷', symbol: 'As' },
   { species: '锌', symbol: 'Zn' }
 ];
+
+/* 检测任务用的五种（不含砷）与砷单独检测用的清单 */
+const MULTI_TASK_SPECIES = HEAVY_METAL_SPECIES.filter(it => it.symbol !== 'As');
+const ARSENIC_TASK_SPECIES = HEAVY_METAL_SPECIES.filter(it => it.symbol === 'As');
+
+/** 按任务类型取对应的金属清单 */
+function speciesForTask(taskType) {
+  return taskType === '砷检测' ? ARSENIC_TASK_SPECIES : MULTI_TASK_SPECIES;
+}
+
+/** 当前正在进行的任务类型（用于结果表列哪几种金属） */
+let activeTaskType = '检测任务';
 
 /* =====================================================================
  * 重金属峰位参考
@@ -3786,7 +3852,7 @@ const CALIBRATION = {
   As: { k: 0.24, b: 0.15 },
   Zn: { k: 0.31, b: 0.15 }
 };
-let speciesRows = HEAVY_METAL_SPECIES.map(it => ({
+let speciesRows = speciesForTask('检测任务').map(it => ({
   species: it.species,
   symbol: it.symbol,
   potential: null,
@@ -3879,8 +3945,8 @@ function analyzeHeavyMetals(currents, scan, rows) {
 }
 
 /** 生成一份空白结果行（所有测量值为 null，表格显示 --） */
-function blankSpeciesRows() {
-  return HEAVY_METAL_SPECIES.map(it => ({
+function blankSpeciesRows(taskType) {
+  return speciesForTask(taskType || activeTaskType).map(it => ({
     species: it.species,
     symbol: it.symbol,
     potential: null,
@@ -3964,7 +4030,7 @@ function renderSpeciesTable() {
 
 /** 某条历史记录的重金属结果：用它自己的曲线数据重新跑一遍处理函数 */
 function speciesRowsOfHistory(item) {
-  const rows = blankSpeciesRows();
+  const rows = blankSpeciesRows(item && item.taskType);
   if (!item || !item.data || !item.data.length) return rows;
   const nums = item.data.map(currentFromRaw);
   const scanObj = {
@@ -4475,6 +4541,9 @@ function startTask() {
   };
 
   const cfg = PROTOCOL.task[currentTask];
+  // 本次任务对应哪几种金属：砷检测只算砷，检测任务算五种
+  activeTaskType = cfg.label;
+  speciesRows = blankSpeciesRows(activeTaskType);
   let frame = cfg.head;
   // 只有带参数的任务（检测）才拼参数段；清洁是单条 @M5@W
   if (cfg.withParams !== false) {
@@ -5802,7 +5871,8 @@ function renderHistoryList() {
            background:${COMPARE_PALETTE[colorIdx % COMPARE_PALETTE.length].hex};"></span>`
       : '';
     return `
-      <div class="hist-item ${item.taskType === '清洁任务' ? 'clean' : 'detect'}${String(item.id) === selectedId ? ' active' : ''}">
+      <div class="hist-item ${item.taskType === '清洁任务' ? 'clean'
+        : (item.taskType === '砷检测' ? 'arsenic' : 'detect')}${String(item.id) === selectedId ? ' active' : ''}">
         <div class="row1">
           <label class="cmp">
             <input type="checkbox" data-id="${item.id}" ${checked ? 'checked' : ''}
@@ -6258,9 +6328,15 @@ function refreshParamInfo() {
 function syncTaskTheme(task) {
   const isClean = task === 'CLEAN';
   const isDetect = task === 'DETECTION';
+  const isArsenic = task === 'ARSENIC';
+  const anyTask = isClean || isDetect || isArsenic;
 
   const hero = $('taskHero');
-  if (hero) hero.classList.toggle('hidden', !(isClean || isDetect));
+  if (hero) hero.classList.toggle('hidden', !anyTask);
+  if (hero) {
+    hero.classList.toggle('hero-arsenic', isArsenic);
+    hero.classList.toggle('hero-clean', isClean);
+  }
 
   const ico = $('taskHeroIco');
   if (ico) {
@@ -6274,16 +6350,17 @@ function syncTaskTheme(task) {
   }
 
   const title = $('taskHeroTitle');
-  if (title) title.textContent = isClean ? '清洁任务' : '检测任务';
+  if (title) title.textContent = isClean ? '清洁任务' : (isArsenic ? '砷检测' : '检测任务');
 
   const sub = $('taskHeroSub');
-  if (sub) sub.textContent = isClean ? '清洗参数设置' : '扫描参数设置';
+  if (sub) sub.textContent = isClean ? '清洗参数设置' : (isArsenic ? '单独测砷参数' : '五种金属参数');
 
   const tag = $('taskTag');
   if (tag) {
-    tag.classList.toggle('hidden', !(isClean || isDetect));
+    tag.classList.toggle('hidden', !anyTask);
     tag.classList.toggle('clean', isClean);
-    tag.textContent = isClean ? '清洁' : '检测';
+    tag.classList.toggle('arsenic', isArsenic);
+    tag.textContent = isClean ? '清洁' : (isArsenic ? '砷' : '检测');
   }
 }
 
@@ -6299,8 +6376,18 @@ function showParamPage(task) {
     if (el && !el.classList.contains('hidden')) paramFromPage = id;
   });
 
+  // 离开上一个任务前，把它当前的参数存下来
+  if (currentTask && currentTask !== task) saveParamsForTask(currentTask);
+
   currentTask = task;
   const cfg = PROTOCOL.task[task];
+
+  // 本次任务对应的金属清单（砷检测只有砷）
+  activeTaskType = cfg.label;
+  speciesRows = blankSpeciesRows(activeTaskType);
+
+  // 换成本任务自己的参数（没有存过就用默认值）
+  loadParamsForTask(task);
 
   resetScrollIfSwitching('paramPage');
   ['homePage', 'detectPage', 'historyPage', 'devicePage'].forEach(function (id) {
@@ -6310,14 +6397,16 @@ function showParamPage(task) {
   $('paramPage').classList.remove('hidden');
   // 检测 / 清洁 用两套主题色，避免两个参数页看起来一样
   $('paramPage').classList.toggle('task-clean', task === 'CLEAN');
-  $('paramPage').classList.toggle('task-detect', task !== 'CLEAN');
+  $('paramPage').classList.toggle('task-arsenic', task === 'ARSENIC');
+  $('paramPage').classList.toggle('task-detect', task !== 'CLEAN' && task !== 'ARSENIC');
   syncTaskTheme(task);
   $('cleanPage').classList.add('hidden');
   $('runPage').classList.add('hidden');
   syncHomeBtn(false);
   // 先定导航高亮（它会顺带改标题），再覆盖成本页标题，避免被覆盖
-  setActiveNav(task === 'CLEAN' ? 'navClean' : 'navDetect');
-  setPageHeader(task === 'CLEAN' ? '清洁参数' : '检测参数');
+  setActiveNav(task === 'CLEAN' ? 'navClean' : (task === 'ARSENIC' ? 'navAs' : 'navDetect'));
+  setPageHeader(task === 'CLEAN' ? '清洁参数'
+    : (task === 'ARSENIC' ? '砷检测参数' : '检测参数'));
 
   // 标题与按钮文案
   const title = $('paramPageTitle');
@@ -6354,6 +6443,38 @@ function closeParamPage() {
 }
 
 /** 恢复默认参数 */
+/** 每个任务各存一套参数（砷检测用不同电极，参数通常不一样） */
+function paramsKeyOf(task) { return 'swv_params_' + task; }
+
+/** 把当前表单写进 localStorage */
+function saveParamsForTask(task) {
+  if (!task) return;
+  try {
+    localStorage.setItem(paramsKeyOf(task), JSON.stringify(currentParams()));
+  } catch (e) { /* 存不下就算了，不影响本次任务 */ }
+}
+
+/** 从 localStorage 恢复某任务的参数；没有就恢复默认 */
+function loadParamsForTask(task) {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(paramsKeyOf(task)) || 'null'); }
+  catch (e) { saved = null; }
+  if (!saved || typeof saved !== 'object') { resetParamForm(); return; }
+
+  const set = (id, v) => { const el = $(id); if (el && v !== undefined && v !== null) el.value = v; };
+  if (saved.startMv != null) set('m_p1', saved.startMv / PROTOCOL.voltScale);
+  if (saved.endMv != null) set('m_p2', saved.endMv / PROTOCOL.voltScale);
+  if (saved.depositMv != null) set('m_p3', saved.depositMv / PROTOCOL.voltScale);
+  if (saved.depositS != null) set('m_p4', saved.depositS);
+  if (saved.stepMv != null) set('m_p5', saved.stepMv / PROTOCOL.voltScale);
+  if (saved.pulseMv != null) set('m_p6', saved.pulseMv / PROTOCOL.voltScale);
+  if (saved.sampleHz != null) set('m_p7', saved.sampleHz);
+  if (saved.sensitivityK != null) set('m_p8', saved.sensitivityK);
+
+  syncDepositTimeFromForm();
+  refreshParamInfo();
+}
+
 function resetParamForm() {
   Object.keys(PARAM_DEFAULTS).forEach(function (id) {
     const el = $(id);
@@ -6671,7 +6792,7 @@ window.addEventListener('load', () => {
  *   - 检测/清洁：仍走 selectMode()（内含"未连接"守卫与参数弹窗）
  *   - 历史：仍走 showHistoryPage()
  * ===================================================================*/
-const NAV_IDS = ['navHome', 'navDetect', 'navClean', 'navHistory', 'navDevice'];
+const NAV_IDS = ['navHome', 'navDetect', 'navAs', 'navClean', 'navHistory', 'navDevice'];
 
 function setActiveNav(id) {
   NAV_IDS.forEach(k => {
@@ -6681,6 +6802,7 @@ function setActiveNav(id) {
   const titles = {
     navHome:    '主界面',
     navDetect:  '检测任务',
+    navAs:      '砷检测',
     navClean:   '清洁任务',
     navHistory: '历史记录',
     navDevice:  '设备管理'
@@ -6951,6 +7073,10 @@ function navDetect() {
   selectMode('DETECTION');
 }
 /** 侧边栏"清洁任务" */
+function navAs() {
+  cancelAutoReturn();
+  selectMode('ARSENIC');
+}
 function navClean() {
   cancelAutoReturn();
   // 同上：高亮交给 showParamPage，守卫失败时保持原样
