@@ -5678,8 +5678,9 @@ function buildPeakGuideSeries(sourceRows) {
   const peaks = src.__peaks;
 
   // 有全局峰表时，所有峰（含未归属）都画基线
+  // 辅助线对所有峰都画（包括未归属的）；只是不标数值
   const items = (peaks && peaks.length)
-    ? peaks.filter(function (pk) { return !!pk.row; }).map(function (pk) {
+    ? peaks.map(function (pk) {
         return {
           potential: pk.potential, apexCurrent: pk.apex,
           baseline: { lx: pk.leftV, ly: pk.leftY, rx: pk.rightV, ry: pk.rightY, py: pk.baseline }
