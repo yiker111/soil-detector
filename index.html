@@ -5679,7 +5679,7 @@ function buildPeakGuideSeries(sourceRows) {
 
   // 有全局峰表时，所有峰（含未归属）都画基线
   const items = (peaks && peaks.length)
-    ? peaks.map(function (pk) {
+    ? peaks.filter(function (pk) { return !!pk.row; }).map(function (pk) {
         return {
           potential: pk.potential, apexCurrent: pk.apex,
           baseline: { lx: pk.leftV, ly: pk.leftY, rx: pk.rightV, ry: pk.rightY, py: pk.baseline }
@@ -5775,8 +5775,9 @@ function buildPeakMarks(sourceRows) {
     return r && r.potential !== null && r.peakCurrent !== null;
   });
 
-  // 优先用"全局找峰"的结果：未归属到金属的峰也一起标出来
-  const peaks = src.__peaks;
+  // 只用"全局找峰"里已经归入某个金属的峰；
+  // 未归属的（没检测出对应金属）不标，避免出现无意义的「峰」标签
+  const peaks = (src.__peaks || []).filter(function (pk) { return !!pk.row; });
   if (peaks && peaks.length) {
     return {
       symbol: 'circle',
