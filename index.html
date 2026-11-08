@@ -3770,13 +3770,17 @@ function isOverLimit(row) {
   return isFinite(c) && row.concentration !== '未检出' && c > th;
 }
 
+/* 峰位来自本系统实测（10 3 / 555 两份数据的平均）：
+ *   锌 -1.010/-0.955  镉 -0.710/-0.680  铅 -0.510/-0.470
+ *   铜 -0.020/-0.010  汞  0.330/ 0.365
+ * 砷用独立电极单独测，暂留 0.00，等实测数据再定。 */
 const PEAK_REFERENCE = {
-  Cd: { peakV: -0.82, tolerance: 0.10 },
-  Pb: { peakV: -0.56, tolerance: 0.10 },
-  Cu: { peakV: -0.25, tolerance: 0.10 },
-  Hg: { peakV:  0.15, tolerance: 0.08 },
-  As: { peakV:  0.00, tolerance: 0.10 },
-  Zn: { peakV: -1.00, tolerance: 0.10 }
+  Zn: { peakV: -0.98, tolerance: 0.10 },
+  Cd: { peakV: -0.70, tolerance: 0.10 },
+  Pb: { peakV: -0.49, tolerance: 0.10 },
+  Cu: { peakV: -0.02, tolerance: 0.10 },
+  Hg: { peakV:  0.35, tolerance: 0.08 },
+  As: { peakV:  0.00, tolerance: 0.10 }
 };
 
 /* =====================================================================
@@ -3854,7 +3858,7 @@ function refineApex(volts, y, i) {
  * 匹配代价 = |峰位 − 参考峰位|，跳过代价 = SKIP_COST。
  * @returns {Map<peak, row>}
  */
-function assignPeaksToMetals(peaks, rows) {
+function matchPeaksToMetals(peaks, rows) {
   const MAP_MAX = 0.45;    // 单对最大允许偏差（V）
   const SKIP_COST = 0.6;   // 跳过一个峰/一个金属的代价
 
@@ -3915,7 +3919,83 @@ function assignPeaksToMetals(peaks, rows) {
     else if (a === 'skipMetal') { j--; }
     else { break; }
   }
-  return out;
+  return { map: out, cost: dp[n][m], matched: out.size };
+}
+
+/** 只要归属结果 */
+function assignPeaksToMetals(peaks, rows) {
+  return matchPeaksToMetals(peaks, rows).map;
+}
+
+/**
+ * 从三个候选扫描范围里挑「峰位与参考峰最吻合」的一个。
+ * 用于参数页填错起始/终止时自动纠正，保证同一份数据得到同一结果。
+ * @returns {{scan: object, corrected: boolean, cost: number}}
+ */
+function chooseScan(currents, baseScan, metals) {
+  const n = currents.length;
+  if (!n || !baseScan || !(Math.abs(baseScan.step) > 0)) {
+    return { scan: baseScan, corrected: false, cost: 0 };
+  }
+
+  const step = Math.abs(baseScan.step);
+  const span = step * n;
+
+  // 峰在"索引空间"是固定的，整体平移只改变电位数值，
+  // 所以只找一次峰，再扫一遍平移量即可（很便宜）。
+  let peaks = [];
+  try {
+    const volts0 = currents.map(function (_, i) {
+      return PROTOCOL.sampleFirstPoint ? i * step : (i + 1) * step;
+    });
+    peaks = findAllPeaks(volts0, savgolSmooth(currents), currents);
+  } catch (e) { peaks = []; }
+
+  if (!peaks.length) return { scan: baseScan, corrected: false, cost: 0 };
+
+  const refs = metals.map(function (r) { return PEAK_REFERENCE[r.symbol]; }).filter(Boolean);
+  if (!refs.length) return { scan: baseScan, corrected: false, cost: 0 };
+  const refMin = Math.min.apply(null, refs.map(function (r) { return r.peakV; }));
+  const refMax = Math.max.apply(null, refs.map(function (r) { return r.peakV; }));
+
+  const MAX_SHIFT = 0.60;    // 最多允许校正 ±0.6 V
+  const STEP_SHIFT = 0.005;
+
+  let best = null;
+  for (let d = -MAX_SHIFT; d <= MAX_SHIFT + 1e-9; d += STEP_SHIFT) {
+    const shifted = peaks.map(function (p) {
+      return {
+        potential: p.potential + baseScan.start + d,
+        apex: p.apex, height: p.height, index: p.index
+      };
+    });
+
+    let penalty = 0;
+    shifted.forEach(function (p) {
+      if (p.potential < refMin - 0.5 || p.potential > refMax + 0.5) penalty += 0.5;
+    });
+
+    const res = matchPeaksToMetals(shifted, metals);
+    // 加一点"平移代价"：没有明显好处时保持原参数不动，
+    // 免得本来就正确的坐标被硬拽向参考值
+    const cost = res.cost + penalty + (metals.length - res.matched) * 0.6 + Math.abs(d) * 1.0;
+
+    if (!best || cost < best.cost - 1e-9 ||
+        (Math.abs(cost - best.cost) <= 1e-9 && Math.abs(d) < Math.abs(best.d))) {
+      best = { d: d, cost: cost };
+    }
+  }
+
+  return {
+    scan: {
+      start: baseScan.start + best.d,
+      end: baseScan.start + best.d + span,
+      step: baseScan.step,
+      sensitivityK: baseScan.sensitivityK
+    },
+    corrected: Math.abs(best.d) > 0.005,
+    cost: best.cost
+  };
 }
 
 /**
@@ -5592,15 +5672,28 @@ function parseData(raw) {
       sensitivityK: scan.sensitivityK
     };
   } else if (scan.start !== scan.end && nums.length > 1) {
-    // 没有 @SC 时按点数校正步长，但要检查是否和参数页的范围明显不符
-    const expected = Math.round((scan.end - scan.start) / (scan.step || 1));
-    if (scan.step > 0 && Math.abs(nums.length - expected) > Math.max(2, expected * 0.05)) {
-      showTip('扫描参数与数据不符',
-        '数据 ' + nums.length + ' 点，按参数应为 ' + expected + ' 点。' +
-        '峰位会整体偏移，请核对起始/终止电位与步进后再测。');
+    // 没有 @SC：保留参数页填的步进（步进通常是对的），
+    // 让算法在"起点对齐/终点对齐"之间挑最吻合的扫描范围。
+    // 注意：这里不能再用 (终点−起点)/点数 反算步进，否则错的范围会把
+    // 整条曲线压缩，评分反而偏向被压缩的错误范围。
+    let base = scan;
+    if (!(Math.abs(base.step) > 0)) {
+      const step0 = (scan.end - scan.start) / (PROTOCOL.sampleFirstPoint ? nums.length - 1 : nums.length);
+      if (step0 > 0) base = Object.assign({}, scan, { step: step0 });
     }
-    const step = (scan.end - scan.start) / (PROTOCOL.sampleFirstPoint ? nums.length - 1 : nums.length);
-    if (step > 0) scan = Object.assign({}, scan, { step });
+
+    try {
+      const picked = chooseScan(nums, base, blankSpeciesRows(activeTaskType));
+      scan = picked.scan;
+      if (picked.corrected) {
+        // 参数页与数据对不上时，按峰位自动校正，并提示一次
+        showTip('已自动校正扫描范围',
+          '峰位与参数不符，已按数据点数校正为 ' +
+          scan.start.toFixed(2) + ' ~ ' + scan.end.toFixed(2) + ' V');
+      }
+    } catch (e) {
+      scan = base;
+    }
   }
 
   // 检测中页面：统计回传，首帧即视为完成（随后照常进入结果页）
