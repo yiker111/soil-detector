@@ -3894,7 +3894,7 @@ function assignPeaksToMetals(peaks, rows) {
       if (i < n && j < m) {
         const ref = PEAK_REFERENCE[M[j].symbol];
         if (ref) {
-          const limit = Math.min(MAP_MAX, Math.max(0.15, (ref.tolerance || 0.10) * 2.5));
+          const limit = Math.min(MAP_MAX, Math.max(0.18, (ref.tolerance || 0.10) * 3.0));
           const d = Math.abs(P[i].potential - ref.peakV);
           if (d <= limit && cur + d < dp[i + 1][j + 1]) {
             dp[i + 1][j + 1] = cur + d;
@@ -4353,10 +4353,24 @@ function numbersBetween(body, startMark, endMarks) {
 function parseDeviceFrame(raw) {
   const body = String(raw == null ? '' : raw);
   const hasTerminator = body.indexOf('&') >= 0;
+
+  // 可选的扫描参数段：@SC^起始mV*终止mV*步进mV*
+  const scanInfo = (function () {
+    const i = body.indexOf(MARK_SCAN);
+    if (i < 0) return null;
+    const tail = body.slice(i + MARK_SCAN.length);
+    const seg = tail.split('@')[0].split('&')[0];
+    const v = seg.split('*').map(function (s) { return Number(s.replace(/\^/g, '')); })
+                       .filter(function (x) { return isFinite(x) && x !== 0 || x === 0; });
+    const nums = seg.split('*').map(function (s) { return Number(s.replace(/\^/g, '').trim()); })
+                      .filter(function (x) { return isFinite(x); });
+    if (nums.length < 3) return null;
+    return { startMv: nums[0], endMv: nums[1], stepMv: nums[2] };
+  })();
   const forward = numbersBetween(body, MARK_FORWARD, [MARK_REVERSE, MARK_DIFF]);
   const reverse = numbersBetween(body, MARK_REVERSE, [MARK_DIFF]);
   const diff = numbersBetween(body, MARK_DIFF, []);
-  if (diff && diff.length) return { forward, reverse, diff, hasTerminator, source: 'diff' };
+  if (diff && diff.length) return { forward, reverse, diff, hasTerminator, scan: scanInfo, source: 'diff' };
   // 回退：没有有效 @DD 段时（旧格式/清洁模式/帧不完整）按整帧提取数值
   const nums = extractNumbers(body);
   return {
@@ -4364,6 +4378,7 @@ function parseDeviceFrame(raw) {
     reverse,
     diff: nums,
     hasTerminator,
+    scan: scanInfo,
     source: nums.length ? 'fallback' : 'empty'
   };
 }
@@ -4385,6 +4400,8 @@ function isAllZero(nums) {
  * 这里把不含 @DD 的片段缓存下来，等 @DD 到达时拼成完整帧再解析。
  */
 const frameBuffer = { text: '', timer: null, forward: false, reverse: false };
+/** 帧内的可选扫描参数段标记（起始/终止/步进，单位 mV） */
+const MARK_SCAN = '@SC';
 /**
  * 拼帧等待窗口（毫秒）：收到 @DOF/@DOR 片段后，最多再等多久 @DD 段。
  * 这是"同一次回传内相邻片段之间的间隔"，不是整轮检测时长，
@@ -5566,8 +5583,22 @@ function parseData(raw) {
   }
   hideRawWarn();
 
-  // 按实际点数校正步长：设备返回的点数可能与下发参数不一致
-  if (scan.start !== scan.end && nums.length > 1) {
+  // 帧里带 @SC 时以它为准：曲线横轴和峰归属不再依赖参数页手填的值
+  if (parsed.scan && parsed.scan.endMv !== parsed.scan.startMv) {
+    scan = {
+      start: parsed.scan.startMv / PROTOCOL.voltScale,
+      end: parsed.scan.endMv / PROTOCOL.voltScale,
+      step: Math.abs(parsed.scan.stepMv) / PROTOCOL.voltScale,
+      sensitivityK: scan.sensitivityK
+    };
+  } else if (scan.start !== scan.end && nums.length > 1) {
+    // 没有 @SC 时按点数校正步长，但要检查是否和参数页的范围明显不符
+    const expected = Math.round((scan.end - scan.start) / (scan.step || 1));
+    if (scan.step > 0 && Math.abs(nums.length - expected) > Math.max(2, expected * 0.05)) {
+      showTip('扫描参数与数据不符',
+        '数据 ' + nums.length + ' 点，按参数应为 ' + expected + ' 点。' +
+        '峰位会整体偏移，请核对起始/终止电位与步进后再测。');
+    }
     const step = (scan.end - scan.start) / (PROTOCOL.sampleFirstPoint ? nums.length - 1 : nums.length);
     if (step > 0) scan = Object.assign({}, scan, { step });
   }
