@@ -3889,12 +3889,14 @@ function assignPeaksToMetals(peaks, rows) {
         dp[i][j + 1] = cur + SKIP_COST;
         act[i][j + 1] = 'skipMetal';
       }
-      // 匹配
+      // 匹配：允许的最大偏差按该金属的容差自适应，
+      // 免得砷模式（只有一种金属）去抓一个离它很远的峰
       if (i < n && j < m) {
         const ref = PEAK_REFERENCE[M[j].symbol];
         if (ref) {
+          const limit = Math.min(MAP_MAX, Math.max(0.15, (ref.tolerance || 0.10) * 2.5));
           const d = Math.abs(P[i].potential - ref.peakV);
-          if (d <= MAP_MAX && cur + d < dp[i + 1][j + 1]) {
+          if (d <= limit && cur + d < dp[i + 1][j + 1]) {
             dp[i + 1][j + 1] = cur + d;
             act[i + 1][j + 1] = 'match';
           }
