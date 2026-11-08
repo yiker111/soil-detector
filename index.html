@@ -2441,137 +2441,157 @@ body.side-collapsed .nav-btn .ico { width: auto; }
 .species-pick {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  /* 面板在可视区域里垂直居中，避免下方一大片空白 */
   justify-content: center;
+  gap: 16px;
   min-height: calc(100vh - var(--header-h) - 56px - 96px);
 }
 .species-pick[hidden] { display: none; }
+
 .sp-wrap {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 22px;
   align-items: stretch;
 }
 
 .sp-mode {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 18px;
-  padding: 28px 26px;
-  min-height: 150px;
-  border: 1.5px solid var(--line);
-  border-radius: 20px;
-  background: #fff;
-  text-align: left;
+  justify-content: center;
+  gap: 20px;
+  padding: 44px 28px;
+  min-height: 360px;
+  border: none;
+  border-radius: 26px;
+  color: #fff;
   font-family: inherit;
+  text-align: center;
   cursor: pointer;
   overflow: hidden;
-  transition: border-color .18s, box-shadow .18s, transform .18s;
+  transition: transform .2s cubic-bezier(.2,.8,.3,1), box-shadow .2s;
+}
+.sp-mode:hover { transform: translateY(-5px); }
+.sp-mode:active { transform: translateY(-2px); }
+
+/* 左上柔光 + 右下装饰圆 */
+.sp-mode::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 70% at 12% 0%, rgba(255, 255, 255, .30) 0%, rgba(255, 255, 255, 0) 62%),
+    radial-gradient(70% 60% at 100% 100%, rgba(255, 255, 255, .14) 0%, rgba(255, 255, 255, 0) 60%);
 }
 .sp-mode::after {
   content: "";
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
+  right: -70px;
+  bottom: -90px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  border: 26px solid rgba(255, 255, 255, .10);
   pointer-events: none;
-  opacity: .9;
-  transition: opacity .18s;
 }
-.sp-mode:hover { transform: translateY(-3px); }
-.sp-mode:active { transform: translateY(-1px); }
 
 .spm-ico {
   position: relative;
   z-index: 1;
-  flex: none;
-  width: 56px;
-  height: 56px;
+  width: 78px;
+  height: 78px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
-  color: #fff;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, .18);
+  border: 1px solid rgba(255, 255, 255, .34);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .16);
 }
+.spm-ico svg { width: 34px; height: 34px; }
+
 .spm-body {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  align-items: center;
+  gap: 18px;
   min-width: 0;
-  flex: 1;
 }
 .spm-title {
-  font-size: 18px;
+  font-size: 23px;
   font-weight: 700;
-  letter-spacing: .3px;
-  color: var(--ink);
+  letter-spacing: 1px;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(15, 23, 42, .18);
 }
-.spm-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.spm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 9px;
+}
 .spm-chips .chip {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
-  padding: 7px 13px;
-  border-radius: 10px;
-  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 11px;
+  font-size: 13.5px;
   font-weight: 500;
-  color: var(--ink-2);
-  background: rgba(255, 255, 255, .82);
-  border: 1px solid rgba(148, 163, 184, .22);
-  backdrop-filter: blur(2px);
+  color: #fff;
+  background: rgba(255, 255, 255, .16);
+  border: 1px solid rgba(255, 255, 255, .30);
 }
 .spm-chips .chip b {
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
+  color: #fff;
 }
+
 .spm-arrow {
-  position: relative;
+  position: absolute;
+  right: 22px;
+  bottom: 22px;
   z-index: 1;
-  flex: none;
-  align-self: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(255, 255, 255, .8);
-  border: 1px solid rgba(148, 163, 184, .25);
-  transition: transform .18s, background .18s, color .18s;
+  color: #fff;
+  background: rgba(255, 255, 255, .18);
+  border: 1px solid rgba(255, 255, 255, .34);
+  transition: transform .2s, background .2s;
 }
-.sp-mode:hover .spm-arrow { transform: translateX(3px); }
+.sp-mode:hover .spm-arrow {
+  transform: translateX(4px);
+  background: rgba(255, 255, 255, .30);
+}
 
-/* 五种金属：蓝紫 */
-.sp-mode-five { border-color: #dbe6fb; }
-.sp-mode-five::after {
-  background:
-    radial-gradient(120% 130% at 0% 0%, rgba(22, 119, 255, .10) 0%, rgba(255, 255, 255, 0) 60%),
-    linear-gradient(160deg, rgba(122, 90, 248, .07) 0%, rgba(255, 255, 255, 0) 55%);
+/* 左：五种金属（蓝 → 紫） */
+.sp-mode-five {
+  background: linear-gradient(150deg, #2f7bff 0%, #4f6df6 48%, #7a5af8 100%);
+  box-shadow: 0 18px 44px rgba(58, 92, 230, .30);
 }
-.sp-mode-five .spm-ico { background: linear-gradient(135deg, #1677ff, #7a5af8); box-shadow: 0 8px 20px rgba(48, 92, 220, .28); }
-.sp-mode-five .spm-chips .chip b { color: #1f4fd8; }
-.sp-mode-five .spm-arrow { color: #1677ff; }
-.sp-mode-five:hover { border-color: #b9d3fb; box-shadow: 0 14px 34px rgba(22, 119, 255, .16); }
+.sp-mode-five:hover { box-shadow: 0 26px 56px rgba(58, 92, 230, .38); }
 
-/* 砷：紫 */
-.sp-mode-as { border-color: #e4dcfd; }
-.sp-mode-as::after {
-  background:
-    radial-gradient(120% 130% at 0% 0%, rgba(122, 90, 248, .12) 0%, rgba(255, 255, 255, 0) 60%),
-    linear-gradient(160deg, rgba(167, 139, 250, .08) 0%, rgba(255, 255, 255, 0) 55%);
+/* 右：砷（紫） */
+.sp-mode-as {
+  background: linear-gradient(150deg, #7a5af8 0%, #9370fa 52%, #b18cff 100%);
+  box-shadow: 0 18px 44px rgba(122, 90, 248, .30);
 }
-.sp-mode-as .spm-ico { background: linear-gradient(135deg, #7a5af8, #a78bfa); box-shadow: 0 8px 20px rgba(122, 90, 248, .30); }
-.sp-mode-as .spm-chips .chip b { color: #5b3fd6; }
-.sp-mode-as .spm-arrow { color: #7a5af8; }
-.sp-mode-as:hover { border-color: #d3c4fb; box-shadow: 0 14px 34px rgba(122, 90, 248, .18); }
+.sp-mode-as:hover { box-shadow: 0 26px 56px rgba(122, 90, 248, .38); }
 
 @media (max-width: 900px) {
   .sp-wrap { grid-template-columns: 1fr; }
-  .sp-mode { min-height: 0; padding: 22px; }
+  .sp-mode { min-height: 230px; padding: 32px 22px; }
+  .spm-title { font-size: 20px; }
 }
 
 /* ===================== 响应式 ===================== */
