@@ -79,7 +79,7 @@
   --sh-3: 0 4px 14px rgba(15, 23, 42, .07);
   --sh-4: 0 16px 44px rgba(15, 23, 42, .16);
 
-  --sidebar-w: 210px;
+  --sidebar-w: 224px;
   --header-h:  56px;
 
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
@@ -2685,6 +2685,89 @@ body.side-collapsed .nav-btn .ico { width: auto; }
   #chart { height: 380px; }
   #historyChart { height: 300px; }
 }
+
+/* =====================================================================
+ * 排版放大：关键信息字号 + 细节打磨
+ * ===================================================================*/
+/* 顶栏标题 */
+.app-header h1 {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: .4px;
+}
+
+/* 侧边导航 */
+.side { --sidebar-w: 224px; }
+.nav-btn {
+  font-size: 15px;
+  font-weight: 500;
+  padding: 10px 12px;
+  gap: 10px;
+  letter-spacing: .2px;
+}
+.nav-btn .ico svg { width: 19px; height: 19px; }
+.side-label {
+  font-size: 12px;
+  letter-spacing: .8px;
+  padding: 12px 12px 7px;
+}
+
+/* 卡片标题 */
+.card-head h3 { font-size: 16.5px; letter-spacing: .3px; }
+.card-head h3::before { height: 15px; width: 3.5px; }
+
+/* 指标数字 */
+.metric .k { font-size: 12.5px; letter-spacing: .2px; }
+.metric .v { font-size: 18px; letter-spacing: .2px; }
+.metric .v.sm, .metric .v.small { font-size: 15px; }
+.readout .k { font-size: 12px; }
+.readout .v { font-size: 18px; }
+
+/* 表格 */
+.hm-card .tbl thead th,
+.tbl thead th {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  letter-spacing: .4px;
+}
+.hm-card .tbl tbody td { font-size: 14.5px; padding: 13px 12px; }
+.hm-card .tbl .metal { font-size: 15.5px; font-weight: 650; }
+.hm-card .tbl tbody td.num:not(.empty):not(.muted) { font-size: 17px; }
+.hm-card .tbl .conc-lim { font-size: 11.5px; }
+
+/* 按钮 */
+.btn { font-size: 14px; height: 33px; padding: 0 15px; letter-spacing: .2px; }
+.btn-primary, .btn-run { font-weight: 600; }
+
+/* 首页模式卡 */
+.mode-card b { font-size: 17px; letter-spacing: .3px; }
+.mode-card .go { font-size: 13.5px; font-weight: 600; }
+
+/* 模式选择卡 */
+.spm-title { font-size: 25px; letter-spacing: 1.4px; }
+.spm-chips .chip { font-size: 14.5px; padding: 9px 15px; }
+.spm-chips .chip b { font-size: 14px; }
+
+/* 结果页顶部摘要 */
+.hm-hero h2, .hero-title { font-size: 18px; }
+
+/* 历史条目 */
+.hist-item .type { font-size: 14.5px; font-weight: 600; }
+.hist-item .time { font-size: 12.5px; }
+
+/* 结果摘要条 */
+.rs-item .k { font-size: 12.5px; letter-spacing: .2px; }
+.rs-item .v { font-size: 15.5px; }
+
+/* 空状态与提示 */
+.empty-tip, .empty-state, .no-data { font-size: 14px; }
+.toast, .toast-body, .tip-box { font-size: 14px; }
+
+/* 表单控件 */
+select { font-size: 14.5px; }
+input[type="text"], input[type="number"] { font-size: 14.5px; }
+
 </style>
 
 
@@ -5226,7 +5309,7 @@ function baseOption(hex, fill) {
       backgroundColor: 'rgba(15,23,42,.92)',
       borderWidth: 0,
       padding: [9, 13],
-      textStyle: { color: '#f8fafc', fontSize: 12 },
+      textStyle: { color: '#f8fafc', fontSize: 13.5 },
       extraCssText: 'border-radius:10px; box-shadow:0 10px 30px rgba(15,23,42,.30);',
       formatter: function (params) {
         const pt = params[0].value;
@@ -5236,19 +5319,19 @@ function baseOption(hex, fill) {
     xAxis: {
       type: 'value', name: '电位 (V)', nameLocation: 'middle', nameGap: 30,
       min: 'dataMin', max: 'dataMax',
-      nameTextStyle: { color: '#94a3b8', fontSize: 11.5, fontWeight: 500, padding: [0, 0, 4, 0] },
+      nameTextStyle: { color: '#94a3b8', fontSize: 13, fontWeight: 600, padding: [0, 0, 6, 0] },
       axisLine: { lineStyle: { color: '#e5eaf2' } },
       axisTick: { lineStyle: { color: '#e5eaf2' } },
-      axisLabel: { color: '#94a3b8', fontSize: 11, margin: 12 },
+      axisLabel: { color: '#94a3b8', fontSize: 13, margin: 12 },
       splitLine: { show: false }
     },
     yAxis: {
       type: 'value', name: '电流 (μA)', nameLocation: 'middle', nameGap: 46,
       scale: true,
-      nameTextStyle: { color: '#94a3b8', fontSize: 11.5, fontWeight: 500, padding: [0, 0, 0, 0] },
+      nameTextStyle: { color: '#94a3b8', fontSize: 13, fontWeight: 600, padding: [0, 0, 0, 0] },
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: '#94a3b8', fontSize: 11, margin: 12 },
+      axisLabel: { color: '#94a3b8', fontSize: 13, margin: 12 },
       splitLine: { lineStyle: { color: '#eef2f8', type: [3, 4] } }
     },
     series: [{
@@ -5734,7 +5817,7 @@ function makePeakRich(over) {
     g: { width: 4, height: 1, align: 'center' },
     v: {
       fontFamily: 'ui-monospace, Consolas, "SF Mono", monospace',
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: 600,
       color: valColor,
       lineHeight: 14,
@@ -6380,7 +6463,7 @@ function renderHistoryChart() {
       itemWidth: 16,
       itemHeight: 8,
       itemGap: 14,
-      textStyle: { color: '#64748b', fontSize: 11.5 },
+      textStyle: { color: '#475569', fontSize: 13 },
       data: opt.series.filter(s => s.name).map(s => s.name)
     };
     // 多曲线时 tooltip 列出每一条的值
