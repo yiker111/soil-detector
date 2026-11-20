@@ -3905,12 +3905,20 @@ function isOverLimit(row) {
  *   锌 -1.010/-0.955  镉 -0.710/-0.680  铅 -0.510/-0.470
  *   铜 -0.020/-0.010  汞  0.330/ 0.365
  * 砷用独立电极单独测，暂留 0.00，等实测数据再定。 */
+/* 峰形特征权重：FEATURE_SET = 0 仅峰位；1 加峰宽；2 再加对称性 */
+let FEATURE_SET = 2;
+const FEATURE_W = {
+  sigmaE: 0.12,     // 峰位容差（V），用于归一化
+  sigmaW: 0.035,    // 半高宽容差（V）
+  sigmaG: 0.25      // 对称因子容差（实测峰形离散度较大，取宽）
+};
+
 const PEAK_REFERENCE = {
-  Zn: { peakV: -0.98, tolerance: 0.10 },
-  Cd: { peakV: -0.70, tolerance: 0.10 },
-  Pb: { peakV: -0.49, tolerance: 0.10 },
-  Cu: { peakV: -0.02, tolerance: 0.10 },
-  Hg: { peakV:  0.35, tolerance: 0.08 },
+  Zn: { peakV: -0.98, tolerance: 0.10, fwhm: 0.1287, gamma: 0.55 },
+  Cd: { peakV: -0.70, tolerance: 0.10, fwhm: 0.0698, gamma: 0.563 },
+  Pb: { peakV: -0.49, tolerance: 0.10, fwhm: 0.1069, gamma: 0.357 },
+  Cu: { peakV: -0.02, tolerance: 0.10, fwhm: 0.1099, gamma: 0.627 },
+  Hg: { peakV:  0.35, tolerance: 0.08, fwhm: 0.1123, gamma: 0.595 },
   As: { peakV:  0.00, tolerance: 0.10 }
 };
 
@@ -4031,9 +4039,19 @@ function assignPeaksToMetals(peaks, rows) {
         if (ref) {
           const limit = Math.min(MAP_MAX, Math.max(0.18, (ref.tolerance || 0.10) * 3.0));
           const d = Math.abs(P[i].potential - ref.peakV);
-          if (d <= limit && cur + d < dp[i + 1][j + 1]) {
-            dp[i + 1][j + 1] = cur + d;
-            act[i + 1][j + 1] = 'match';
+          if (d <= limit) {
+            // 归一化的多特征代价：峰位 + 峰宽 + 对称性
+            let cost = Math.pow(d / FEATURE_W.sigmaE, 2);
+            if (FEATURE_SET >= 1 && ref.fwhm && P[i].fwhm) {
+              cost += Math.pow((P[i].fwhm - ref.fwhm) / FEATURE_W.sigmaW, 2) * 0.5;
+            }
+            if (FEATURE_SET >= 2 && ref.gamma && P[i].gamma != null) {
+              cost += Math.pow((P[i].gamma - ref.gamma) / FEATURE_W.sigmaG, 2) * 0.25;
+            }
+            if (cur + cost < dp[i + 1][j + 1]) {
+              dp[i + 1][j + 1] = cur + cost;
+              act[i + 1][j + 1] = 'match';
+            }
           }
         }
       }
@@ -4127,6 +4145,30 @@ function analyzePeakAt(volts, y, raw, pi) {
   const height = apex - base;
   if (!isFinite(height) || height <= 0) return null;
 
+  // ---- 峰形特征：半高宽 FWHM 与对称因子 gamma ----
+  // 在原始数据上找"高于半高"的左右边界（线性插值），用于区分不同金属的峰形
+  const half = base + height / 2;
+  let leftE = null, rightE = null;
+  for (let k = pi; k > li; k--) {
+    if (data[k - 1] <= half) {
+      const t = (half - data[k - 1]) / ((data[k] - data[k - 1]) || 1);
+      leftE = volts[k - 1] + t * (volts[k] - volts[k - 1]);
+      break;
+    }
+  }
+  for (let k = pi; k < ri; k++) {
+    if (data[k + 1] <= half) {
+      const t = (half - data[k + 1]) / ((data[k] - data[k + 1]) || 1);
+      rightE = volts[k + 1] + t * (volts[k] - volts[k + 1]);
+      break;
+    }
+  }
+  let fwhm = null, gamma = null;
+  if (leftE !== null && rightE !== null && rightE > leftE) {
+    fwhm = rightE - leftE;
+    gamma = (volts[pi] - leftE) / fwhm;      // 0.5 = 左右对称
+  }
+
   return {
     index: pi,
     potential: volts[pi],
@@ -4134,7 +4176,8 @@ function analyzePeakAt(volts, y, raw, pi) {
     apex: apex,
     baseline: base,
     leftV: volts[li], rightV: volts[ri],
-    leftY: data[li], rightY: data[ri]
+    leftY: data[li], rightY: data[ri],
+    fwhm: fwhm, gamma: gamma
   };
 }
 
@@ -4311,6 +4354,8 @@ function analyzeHeavyMetals(currents, scan, rows) {
     row.potential = pk.potential.toFixed(3);
     row.peakCurrent = pk.height.toFixed(3);    // 基线校正后的峰高
     row.apexCurrent = pk.apex.toFixed(3);      // 峰顶绝对电流（画图用）
+    row.fwhm = (pk.fwhm != null) ? Number(pk.fwhm.toFixed(4)) : null;
+    row.gamma = (pk.gamma != null) ? Number(pk.gamma.toFixed(3)) : null;
     row.baseline = {
       lx: pk.leftV, ly: pk.leftY,
       rx: pk.rightV, ry: pk.rightY,
