@@ -6086,9 +6086,9 @@ function buildPeakGuideSeries(sourceRows) {
   const peaks = src.__peaks;
 
   // 有全局峰表时，所有峰（含未归属）都画基线
-  // 辅助线对所有峰都画（包括未归属的）；只是不标数值
+  // 辅助线只对已归属的峰绘制；未归属峰不画线，避免杂乱
   const items = (peaks && peaks.length)
-    ? peaks.map(function (pk) {
+    ? peaks.filter(function (pk) { return !!pk.row; }).map(function (pk) {
         return {
           potential: pk.potential, apexCurrent: pk.apex,
           baseline: { lx: pk.leftV, ly: pk.leftY, rx: pk.rightV, ry: pk.rightY, py: pk.baseline }
@@ -6132,7 +6132,7 @@ function buildPeakGuideSeries(sourceRows) {
 
     out.push(mk('peakBase' + i, 3,
       { color: '#94a3b8', width: 1.2, type: 'dashed', opacity: .9 },
-      [[b.lx - ext, b.ly - ext * slope], [b.rx + ext, b.ry + ext * slope]]));
+      [[b.lx, b.ly], [b.rx, b.ry]]));
 
     // 连接线：只画左侧（左谷 → 峰顶），右侧不画
     out.push(mk('peakLink' + i, 3,
