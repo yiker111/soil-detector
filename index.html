@@ -4106,7 +4106,7 @@ function registerPeaks(peaks, rows) {
       const ref = PEAK_REFERENCE[r.symbol];
       if (!ref) return;
       const dS = Math.abs(pk.potential - ref.peakV);
-      if (dS > SHIFT_MAX) return;                  // 超出可校准范围
+      if (dS > 0.35) return;                       // 单峰允许 ±0.35 V 的位差
       let c = Math.pow(dS / 0.20, 2) * 0.05;       // 轻微偏好近标准解
       if (ref.fwhm && pk.fwhm) {
         c += Math.min(4, Math.pow((pk.fwhm - ref.fwhm) / 0.06, 2)) * 0.25;
@@ -6086,9 +6086,14 @@ function buildPeakGuideSeries(sourceRows) {
   const peaks = src.__peaks;
 
   // 有全局峰表时，所有峰（含未归属）都画基线
-  // 辅助线只对已归属的峰绘制；未归属峰不画线，避免杂乱
+  // 辅助线：对"可信的峰"绘制（已归属，或峰高足够且谷点跨度合理）
   const items = (peaks && peaks.length)
-    ? peaks.filter(function (pk) { return !!pk.row; }).map(function (pk) {
+    ? peaks.filter(function (pk) {
+        if (pk.row) return true;
+        if (!(pk.height >= 0.3)) return false;
+        const span = Math.abs(pk.rightV - pk.leftV);
+        return span <= 0.60;
+      }).map(function (pk) {
         return {
           potential: pk.potential, apexCurrent: pk.apex,
           baseline: { lx: pk.leftV, ly: pk.leftY, rx: pk.rightV, ry: pk.rightY, py: pk.baseline }
