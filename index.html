@@ -3909,8 +3909,8 @@ function isOverLimit(row) {
 let FEATURE_SET = 2;
 const FEATURE_W = {
   sigmaE: 0.12,     // 峰位容差（V），用于归一化
-  sigmaW: 0.035,    // 半高宽容差（V）
-  sigmaG: 0.25      // 对称因子容差（实测峰形离散度较大，取宽）
+  sigmaW: 0.060,    // 半高宽容差（V）——实测样品峰宽离散度大，放宽
+  sigmaG: 0.35      // 对称因子容差
 };
 
 const PEAK_REFERENCE = {
@@ -3997,9 +3997,9 @@ function refineApex(volts, y, i) {
  * 匹配代价 = |峰位 − 参考峰位|，跳过代价 = SKIP_COST。
  * @returns {Map<peak, row>}
  */
-function assignPeaksToMetals(peaks, rows) {
+function assignPeaksToMetals(peaks, rows, delta) {
   const MAP_MAX = 0.45;    // 单对最大允许偏差（V）
-  const SKIP_COST = 0.6;   // 跳过一个峰/一个金属的代价
+  const SKIP_COST = 2.0;   // 跳过一个峰/一个金属的代价（大于门限内的匹配代价，避免漏配）
 
   const P = peaks.slice().sort((a, b) => a.potential - b.potential);
   const M = rows.slice().sort(function (a, b) {
@@ -4038,15 +4038,18 @@ function assignPeaksToMetals(peaks, rows) {
         const ref = PEAK_REFERENCE[M[j].symbol];
         if (ref) {
           const limit = Math.min(MAP_MAX, Math.max(0.18, (ref.tolerance || 0.10) * 3.0));
-          const d = Math.abs(P[i].potential - ref.peakV);
+          const d = Math.abs(P[i].potential - ref.peakV - (delta || 0));
           if (d <= limit) {
             // 归一化的多特征代价：峰位 + 峰宽 + 对称性
             let cost = Math.pow(d / FEATURE_W.sigmaE, 2);
             if (FEATURE_SET >= 1 && ref.fwhm && P[i].fwhm) {
-              cost += Math.pow((P[i].fwhm - ref.fwhm) / FEATURE_W.sigmaW, 2) * 0.5;
+              // 峰宽只作辅助，且限制最大惩罚，避免宽峰被"跳过"
+              const tw = Math.min(4, Math.pow((P[i].fwhm - ref.fwhm) / FEATURE_W.sigmaW, 2));
+              cost += tw * 0.25;
             }
             if (FEATURE_SET >= 2 && ref.gamma && P[i].gamma != null) {
-              cost += Math.pow((P[i].gamma - ref.gamma) / FEATURE_W.sigmaG, 2) * 0.25;
+              const tg = Math.min(4, Math.pow((P[i].gamma - ref.gamma) / FEATURE_W.sigmaG, 2));
+              cost += tg * 0.10;
             }
             if (cur + cost < dp[i + 1][j + 1]) {
               dp[i + 1][j + 1] = cur + cost;
@@ -4069,6 +4072,35 @@ function assignPeaksToMetals(peaks, rows) {
     else { break; }
   }
   return out;
+}
+
+/**
+ * 峰谱配准（ICP 思想）：把实测峰谱与标准峰谱做刚体对齐，
+ * 迭代估计整体电位漂移 delta，再在配准坐标系中归属。
+ * 收敛条件：两次迭代的 delta 之差 < 1 mV，最多 6 次。
+ * @returns {{map: Map, delta: number, iter: number}}
+ */
+function registerPeaks(peaks, rows) {
+  const MAX_IT = 6, TOL = 0.001;
+  let delta = 0, map = new Map(), iter = 0;
+
+  for (let it = 0; it < MAX_IT; it++) {
+    iter = it + 1;
+    map = assignPeaksToMetals(peaks, rows, delta);
+    const resid = [];
+    map.forEach(function (row, pk) {
+      const ref = PEAK_REFERENCE[row.symbol];
+      if (ref) resid.push(pk.potential - ref.peakV);
+    });
+    if (resid.length < 2) break;
+    resid.sort(function (a, b) { return a - b; });
+    const med = resid[Math.floor(resid.length / 2)];   // 中位数抗离群
+    if (Math.abs(med - delta) < TOL) { delta = med; break; }
+    delta = med;
+  }
+  // 用最终 delta 再配一次，保证一致性
+  map = assignPeaksToMetals(peaks, rows, delta);
+  return { map: map, delta: delta, iter: iter };
 }
 
 /**
@@ -4341,10 +4373,21 @@ function analyzeHeavyMetals(currents, scan, rows) {
   const peaks = findAllPeaks(volts, y, currents);
 
   // ③ 峰 → 金属：按电位顺序做最优匹配（允许跳过杂峰/未检出的金属）
-  const pairing = assignPeaksToMetals(peaks, list);
+  const reg = registerPeaks(peaks, list);
+  const pairing = reg.map;
+  list.__shift = reg.delta;                  // 本次测量的整体漂移（V）
+  list.__shiftIter = reg.iter;
   pairing.forEach(function (row, pk) {
     pk.symbol = row.symbol;
     pk.row = row;
+  });
+
+  // ③.5 归属置信度：残差越小越可信（0~1）
+  pairing.forEach(function (row, pk) {
+    const ref = PEAK_REFERENCE[row.symbol];
+    if (!ref) return;
+    const z = Math.abs(pk.potential - ref.peakV - reg.delta) / (ref.tolerance || 0.1);
+    row.confidence = Number(Math.max(0, Math.min(1, 1 - z / 2.5)).toFixed(2));
   });
 
   // ④ 填表（只填被认领的峰）
