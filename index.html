@@ -3907,10 +3907,14 @@ function isOverLimit(row) {
  * 砷用独立电极单独测，暂留 0.00，等实测数据再定。 */
 /* 最近一次成功配准得到的整体漂移（持久化，供单峰场景作先验） */
 const DRIFT_KEY = 'swv_last_shift';
+const DRIFT_TS_KEY = 'swv_last_shift_ts';
+const DRIFT_TTL_MS = 7 * 24 * 3600 * 1000;   // 先验有效期 7 天
 let lastShift = 0;
 try {
   const v = Number(localStorage.getItem(DRIFT_KEY));
-  if (isFinite(v)) lastShift = v;
+  const ts = Number(localStorage.getItem(DRIFT_TS_KEY));
+  // 过期先验作废：电极批次/环境可能已变化
+  if (isFinite(v) && isFinite(ts) && (Date.now() - ts) < DRIFT_TTL_MS) lastShift = v;
 } catch (e) { lastShift = 0; }
 
 /* 峰形特征权重：FEATURE_SET = 0 仅峰位；1 加峰宽；2 再加对称性 */
@@ -4116,7 +4120,10 @@ function registerPeaks(peaks, rows) {
 
   // 记录本次漂移，供后续单峰测量作先验
   lastShift = delta;
-  try { localStorage.setItem(DRIFT_KEY, String(Number(delta.toFixed(4)))); } catch (e) {}
+  try {
+    localStorage.setItem(DRIFT_KEY, String(Number(delta.toFixed(4))));
+    localStorage.setItem(DRIFT_TS_KEY, String(Date.now()));
+  } catch (e) {}
 
   return { map: map, delta: delta, iter: iter, source: 'icp' };
 }
@@ -4406,7 +4413,31 @@ function analyzeHeavyMetals(currents, scan, rows) {
     const ref = PEAK_REFERENCE[row.symbol];
     if (!ref) return;
     const z = Math.abs(pk.potential - ref.peakV - reg.delta) / (ref.tolerance || 0.1);
-    row.confidence = Number(Math.max(0, Math.min(1, 1 - z / 2.5)).toFixed(2));
+    let conf = Math.max(0, Math.min(1, 1 - z / 2.5));
+
+    // 用历史先验判定时，结果的可信度应低于自校准
+    if (reg.source === 'prior') conf *= 0.80;
+
+    // 候选边际：与次优金属的代价差太小 → 判别力不足
+    let best = Infinity, second = Infinity;
+    list.forEach(function (r2) {
+      const rf = PEAK_REFERENCE[r2.symbol];
+      if (!rf) return;
+      const d2 = Math.abs(pk.potential - rf.peakV - reg.delta);
+      const lim = Math.min(0.45, Math.max(0.18, (rf.tolerance || 0.10) * 3.0));
+      if (d2 > lim) return;
+      let c = Math.pow(d2 / 0.12, 2);
+      if (rf.fwhm && pk.fwhm) {
+        c += Math.min(4, Math.pow((pk.fwhm - rf.fwhm) / 0.06, 2)) * 0.25;
+      }
+      if (r2.symbol === row.symbol) best = Math.min(best, c);
+      else second = Math.min(second, c);
+    });
+    const margin = (isFinite(second) && isFinite(best)) ? (second - best) : 9;
+    if (margin < 0.8) conf *= 0.7;       // 两个候选几乎打平 → 打折
+    row.ambiguous = margin < 0.8;
+
+    row.confidence = Number(Math.max(0, Math.min(1, conf)).toFixed(2));
   });
 
   // ④ 填表（只填被认领的峰）
