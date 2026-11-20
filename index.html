@@ -4093,39 +4093,87 @@ function assignPeaksToMetals(peaks, rows, delta) {
  * @returns {{map: Map, delta: number, iter: number}}
  */
 function registerPeaks(peaks, rows) {
-  const MAX_IT = 6, TOL = 0.001;
-  let delta = 0, map = new Map(), iter = 0;
+  const SHIFT_MAX = 0.15;          // 允许自校准 ±150 mV
+  const ENTRY_COST = 2.0;          // 未匹配的峰/金属代价
 
-  for (let it = 0; it < MAX_IT; it++) {
-    iter = it + 1;
-    map = assignPeaksToMetals(peaks, rows, delta);
+  if (!peaks.length) return { map: new Map(), delta: 0, iter: 0, source: 'none' };
+
+  // ---- 单峰：位置可被 δ 完全吸收，只能靠峰形判别 ----
+  if (peaks.length === 1) {
+    const pk = peaks[0];
+    let best = null, second = Infinity;
+    rows.forEach(function (r) {
+      const ref = PEAK_REFERENCE[r.symbol];
+      if (!ref) return;
+      const dS = Math.abs(pk.potential - ref.peakV);
+      if (dS > SHIFT_MAX) return;                  // 超出可校准范围
+      let c = Math.pow(dS / 0.20, 2) * 0.05;       // 轻微偏好近标准解
+      if (ref.fwhm && pk.fwhm) {
+        c += Math.min(4, Math.pow((pk.fwhm - ref.fwhm) / 0.06, 2)) * 0.25;
+      }
+      if (ref.gamma && pk.gamma != null) {
+        c += Math.min(4, Math.pow((pk.gamma - ref.gamma) / 0.35, 2)) * 0.10;
+      }
+      if (!best || c < best.c) { if (best) second = Math.min(second, best.c); best = { r: r, c: c }; }
+      else second = Math.min(second, c);
+    });
+    const map = new Map();
+    if (!best) return { map: map, delta: 0, iter: 1, source: 'single', margin: 0 };
+    map.set(pk, best.r);
+    const mu = PEAK_REFERENCE[best.r.symbol].peakV;
+    return {
+      map: map, delta: pk.potential - mu, iter: 1, source: 'single',
+      margin: (isFinite(second) ? second - best.c : 9)
+    };
+  }
+
+  // ---- 多峰：先网格搜索整体漂移，再中位数细化 ----
+  const score = function (d) {
+    const m = assignPeaksToMetals(peaks, rows, d);
+    let s = 0, matched = 0;
+    m.forEach(function (row, pk) {
+      const ref = PEAK_REFERENCE[row.symbol];
+      if (!ref) return;
+      matched++;
+      const dE = Math.abs(pk.potential - ref.peakV - d);
+      s += Math.pow(dE / 0.12, 2);
+      if (ref.fwhm && pk.fwhm) {
+        s += Math.min(4, Math.pow((pk.fwhm - ref.fwhm) / 0.06, 2)) * 0.25;
+      }
+    });
+    s += ENTRY_COST * ((peaks.length - matched) + (rows.length - m.size));
+    return { s: s, map: m, matched: matched };
+  };
+
+  let best = null;
+  for (let d = -SHIFT_MAX; d <= SHIFT_MAX + 1e-9; d += 0.01) {
+    const r = score(d);
+    if (!best || r.s < best.s) best = { d: d, s: r.s };
+  }
+
+  let delta = best.d;
+  for (let it = 0; it < 3; it++) {
+    const r = score(delta);
     const resid = [];
-    map.forEach(function (row, pk) {
+    r.map.forEach(function (row, pk) {
       const ref = PEAK_REFERENCE[row.symbol];
       if (ref) resid.push(pk.potential - ref.peakV);
     });
-    if (resid.length < 2) {
-      // 峰太少，无法自校准：改用历史漂移先验 + 峰形辅助判别
-      const prior = (isFinite(lastShift) && Math.abs(lastShift) < 0.3) ? lastShift : 0;
-      map = assignPeaksToMetals(peaks, rows, prior);
-      return { map: map, delta: prior, iter: iter, source: prior ? 'prior' : 'none' };
-    }
+    if (resid.length < 2) break;
     resid.sort(function (a, b) { return a - b; });
-    const med = resid[Math.floor(resid.length / 2)];   // 中位数抗离群
-    if (Math.abs(med - delta) < TOL) { delta = med; break; }
+    const med = resid[Math.floor(resid.length / 2)];
+    if (Math.abs(med - delta) < 0.001) { delta = med; break; }
     delta = med;
   }
-  // 用最终 delta 再配一次，保证一致性
-  map = assignPeaksToMetals(peaks, rows, delta);
 
-  // 记录本次漂移，供后续单峰测量作先验
+  const fin = score(delta);
   lastShift = delta;
   try {
     localStorage.setItem(DRIFT_KEY, String(Number(delta.toFixed(4))));
     localStorage.setItem(DRIFT_TS_KEY, String(Date.now()));
   } catch (e) {}
 
-  return { map: map, delta: delta, iter: iter, source: 'icp' };
+  return { map: fin.map, delta: delta, iter: 1 + 3, source: 'grid' };
 }
 
 /**
