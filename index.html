@@ -3905,6 +3905,14 @@ function isOverLimit(row) {
  *   锌 -1.010/-0.955  镉 -0.710/-0.680  铅 -0.510/-0.470
  *   铜 -0.020/-0.010  汞  0.330/ 0.365
  * 砷用独立电极单独测，暂留 0.00，等实测数据再定。 */
+/* 最近一次成功配准得到的整体漂移（持久化，供单峰场景作先验） */
+const DRIFT_KEY = 'swv_last_shift';
+let lastShift = 0;
+try {
+  const v = Number(localStorage.getItem(DRIFT_KEY));
+  if (isFinite(v)) lastShift = v;
+} catch (e) { lastShift = 0; }
+
 /* 峰形特征权重：FEATURE_SET = 0 仅峰位；1 加峰宽；2 再加对称性 */
 let FEATURE_SET = 2;
 const FEATURE_W = {
@@ -4092,7 +4100,12 @@ function registerPeaks(peaks, rows) {
       const ref = PEAK_REFERENCE[row.symbol];
       if (ref) resid.push(pk.potential - ref.peakV);
     });
-    if (resid.length < 2) break;
+    if (resid.length < 2) {
+      // 峰太少，无法自校准：改用历史漂移先验 + 峰形辅助判别
+      const prior = (isFinite(lastShift) && Math.abs(lastShift) < 0.3) ? lastShift : 0;
+      map = assignPeaksToMetals(peaks, rows, prior);
+      return { map: map, delta: prior, iter: iter, source: prior ? 'prior' : 'none' };
+    }
     resid.sort(function (a, b) { return a - b; });
     const med = resid[Math.floor(resid.length / 2)];   // 中位数抗离群
     if (Math.abs(med - delta) < TOL) { delta = med; break; }
@@ -4100,7 +4113,12 @@ function registerPeaks(peaks, rows) {
   }
   // 用最终 delta 再配一次，保证一致性
   map = assignPeaksToMetals(peaks, rows, delta);
-  return { map: map, delta: delta, iter: iter };
+
+  // 记录本次漂移，供后续单峰测量作先验
+  lastShift = delta;
+  try { localStorage.setItem(DRIFT_KEY, String(Number(delta.toFixed(4)))); } catch (e) {}
+
+  return { map: map, delta: delta, iter: iter, source: 'icp' };
 }
 
 /**
@@ -4377,6 +4395,7 @@ function analyzeHeavyMetals(currents, scan, rows) {
   const pairing = reg.map;
   list.__shift = reg.delta;                  // 本次测量的整体漂移（V）
   list.__shiftIter = reg.iter;
+  list.__shiftSource = reg.source || 'icp';  // icp=自校准；prior=历史先验；none=无
   pairing.forEach(function (row, pk) {
     pk.symbol = row.symbol;
     pk.row = row;
