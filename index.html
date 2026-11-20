@@ -4144,8 +4144,16 @@ function findAllPeaks(volts, y, raw) {
   let ymin = Infinity, ymax = -Infinity;
   for (let i = 0; i < n; i++) { if (data[i] < ymin) ymin = data[i]; if (data[i] > ymax) ymax = data[i]; }
   const span = ymax - ymin;
-  // 阈值按曲线幅度取 2%：极小的毛刺不再当成峰
-  const minH = Math.max(PEAK_ALGO.minHeight, span * 0.02);
+
+  // 噪声水平（MAD 稳健估计）：一阶差分的中位绝对偏差
+  const diffs = [];
+  for (let i = 1; i < n; i++) diffs.push(Math.abs(data[i] - data[i - 1]));
+  diffs.sort(function (a, b) { return a - b; });
+  const mad = diffs[Math.floor(diffs.length / 2)] || 0;
+  const sigmaN = mad / 0.6745 / Math.SQRT2;
+
+  // 三道下限：绝对下限、幅度 2%、噪声的 3 倍
+  const minH = Math.max(PEAK_ALGO.minHeight, span * 0.02, sigmaN * 4);
   const minSep = 0.03;                                        // V
 
   const out = [];
@@ -4157,6 +4165,12 @@ function findAllPeaks(volts, y, raw) {
     if (pk.height < minH) continue;
     if (out.some(function (o) { return Math.abs(o.potential - pk.potential) < minSep; })) continue;
     out.push(pk);
+  }
+
+  // 信号缺失保护：若最强峰仍不足噪声的 6 倍，判为"无有效信号"
+  if (out.length) {
+    const maxAll = out.reduce(function (m, p) { return Math.max(m, p.height); }, 0);
+    if (maxAll < sigmaN * 6) return [];
   }
 
   // 相对过滤：比最大峰还小 4% 的起伏一律不标（主峰旁边的微小毛刺）
